@@ -1,0 +1,305 @@
+---
+title: "MiscelaneousPlots"
+author: "Tanner Jensen"
+date: "12/7/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(ggridges)
+library(readr)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
+
+ggplot <- function(...) {
+  ggdefault <- gg_color_hue(5)
+  ggdefault[2] = "#00BA38"
+  ggdefault[3] = "#964CDF"
+  
+  ggplot2::ggplot(...) +
+    scale_fill_manual(values = ggdefault) +
+    theme_bw() + 
+    theme(panel.border = element_blank(), 
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(), 
+          axis.line = element_line(colour = "black"),
+          axis.text.x = element_text(angle = 30, hjust = 1))
+}
+```
+
+
+
+```{r}
+names <- c("id", "chrom", "length")
+camo.lengths <- list()
+camo.lengths[["IlluminaRL100"]] = read_delim("../length_metrics/illuminaRL100/illuminaRL100.camo_length.txt", delim = " ", col_names = names, col_types = "ici")
+camo.lengths[["IlluminaRL250"]] = read_delim("../length_metrics/illuminaRL250/illuminaRL250.camo_length.txt", delim = " ", col_names = names, col_types = "ici")
+camo.lengths[["ONT"]] = read_delim("../length_metrics/ONT/ONT.camo_length.txt", delim = " ", col_names = names, col_types = "ici")
+camo.lengths[["PacBio"]] = read_delim("../length_metrics/pacBio/pacBio.camo_length.txt",  delim = " ", col_names = names, col_types = "ici")
+camo.lengths[["10x"]] = read_delim("../length_metrics/10X/10X.camo_length.txt", delim = " ", col_names = names, col_types = "ici")
+
+camo.lengths.df <- NULL
+for (sequencer in names(camo.lengths)) {
+  camo.lengths[[sequencer]]$sequencer <- sequencer
+  camo.lengths.df <- rbind(camo.lengths.df, camo.lengths[[sequencer]])
+}
+camo.lengths.df$sequencer <- factor(camo.lengths.df$sequencer, levels=names(camo.lengths))
+camo.lengths.df %<>% filter(length > 20)
+
+
+by(camo.lengths.df, camo.lengths.df$sequencer, summary)
+ggplot(camo.lengths.df, aes(length, y = sequencer, fill=sequencer, alpha = .2)) + 
+  geom_density_ridges() +
+  scale_x_continuous(trans='log10', breaks = c(100, 1000, 10000, 100000)) + 
+  xlab("Length of camo regions")
+
+ggdefault <- gg_color_hue(5)
+ggdefault[2] = "#00BA38"
+ggdefault[3] = "#964CDF"
+ill100.length <- filter(camo.lengths.df, sequencer == "IlluminaRL100")
+pdf("camo_lengths.density.pdf")
+ggplot(ill100.length, aes(length, fill = "salmon", alpha = .1)) +
+  geom_density() +
+  scale_x_continuous(trans='log10', breaks = c(20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000)) +
+  geom_vline(xintercept = 100, color = ggdefault[1], linetype = "dashed", size = 1) +
+  geom_vline(xintercept = 250, color = ggdefault[2], linetype = "dashed", size = 1) + 
+  geom_vline(xintercept = 6276, color = ggdefault[5], linetype = "dashed", size = 1) +
+  geom_vline(xintercept = 8511, color = ggdefault[4], linetype = "dashed", size = 1) +
+  geom_vline(xintercept = 150, color = ggdefault[3], linetype = "dashed", size = 1) + 
+  xlab("Length of low MAPQ regions") +
+  theme(legend.position = "none")
+dev.off()
+ggplot(ill100.length, aes(length, fill = "salmon", alpha = .1)) +
+  geom_density() +
+  scale_x_continuous(trans='log10', breaks = c(20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000)) +
+  geom_vline(xintercept = 100, color = ggdefault[1], linetype = "dashed", size = 1) +
+  geom_vline(xintercept = 250, color = ggdefault[2], linetype = "dashed", size = 1) + 
+  geom_vline(xintercept = 6276, color = ggdefault[5], linetype = "dashed", size = 1) +
+  geom_vline(xintercept = 8511, color = ggdefault[4], linetype = "dashed", size = 1) +
+  geom_vline(xintercept = 150, color = ggdefault[3], linetype = "dashed", size = 1) + 
+  xlab("Length of camo regions") +
+  theme(legend.position = "none")
+```
+## Find Modes
+```{r}
+camo_length_density <- density(log10(ill100.length$length))
+plot(camo_length_density)
+mode_value_1 <- camo_length_density$x[which.max(camo_length_density$y)]
+10^mode_value_1
+
+camo_length_density <- density(log10(ill100.length$length[ill100.length$length > 200]))
+plot(camo_length_density)
+mode_value_2 <- camo_length_density$x[which.max(camo_length_density$y)]
+10^mode_value_2
+
+ggplot()
+
+```
+
+```{r}
+#Calculate N50 statistic function
+N50 <- function(lengths) {
+  lengths.sorted <- sort(lengths, decreasing = T)
+  target <- .5 * sum(lengths.sorted)
+  running_total <- 0
+  for (length in lengths.sorted) {
+    running_total <- running_total + length
+    if (running_total > target) {
+      return(length)
+    }
+  }
+}
+```
+
+```{r}
+print("N50 for camo regions across sequencers:")
+for (i in levels(camo.lengths.df$sequencer)) {
+  cat(paste0("\t",i,"\t: ",N50(camo.lengths.df$length[camo.lengths.df$sequencer == i]),"\n"))
+}
+```
+
+## Distance between camoulogs
+```{r}
+names = c("camo_pair", "dist")
+distance_between <- list()
+distance_between <- list()
+distance_between[["IlluminaRL100"]] = read_tsv("../length_metrics/illuminaRL100/illuminaRL100.distance_between.txt", col_names = names)
+distance_between[["IlluminaRL250"]] = read_tsv("../length_metrics/illuminaRL250/illuminaRL250.distance_between.txt", col_names = names)
+distance_between[["ONT"]] = read_tsv("../length_metrics/ONT/ONT.distance_between.txt", col_names = names)
+distance_between[["PacBio"]] = read_tsv("../length_metrics/pacBio/pacBio.distance_between.txt", col_names = names)
+distance_between[["10x"]] = read_tsv("../length_metrics/10X/10X.distance_between.txt", col_names = names)
+
+#ggplot(distance_df, aes(x = dist)) +
+#  geom_histogram(fill = "salmon")
+
+sequencer <- names(distance_between)
+diff_chrom <- sapply(sequencer, function(x) sum(distance_between[[x]]$dist == Inf))
+same_chrom <- sapply(sequencer, function(x) sum(distance_between[[x]]$dist != Inf))
+barplot_input <- data.frame(sequencer = sequencer, "Different" = diff_chrom, "Same" = same_chrom)
+barplot_input.tidy <- gather(barplot_input, chrom, Count, -sequencer)
+barplot_input.tidy$sequencer <- factor(barplot_input.tidy$sequencer, levels = sequencer)
+
+ggplot2::ggplot(barplot_input.tidy, aes(x = sequencer, y=Count, fill = chrom)) +
+  geom_bar(stat="identity", position = "dodge")+
+  xlab("Sequencing technology") +
+  ylab("Count") +
+  labs(fill = "Chromosomal location") +
+  theme_bw() +
+   theme(panel.border = element_blank(), 
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(), 
+          axis.line = element_line(colour = "black"))
+
+total <- sapply(sequencer, function(x) nrow(distance_between[[x]]))
+barplot_input.tidy$prop.chrom <- barplot_input.tidy$Count / total
+ggplot2::ggplot(barplot_input.tidy, aes(x = sequencer, y=prop.chrom, fill = chrom)) +
+  geom_bar(stat="identity") +
+  xlab("Sequencing technology") +
+  ylab("Proportion of total camoulog pairs") +
+  labs(fill = "Chromosomal location") +
+  theme_bw() + 
+   theme(panel.border = element_blank(), 
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(), 
+          axis.line = element_line(colour = "black"))
+
+distance_df <- NULL
+for (i in sequencer) {
+  distance_between[[i]]$sequencer <- i
+  distance_df <- rbind(distance_df, distance_between[[i]])
+}
+distance_df$sequencer <- factor(distance_df$sequencer, levels = sequencer)
+distance_df %<>% filter(dist != Inf)
+distance_df %<>% filter(dist > 100)
+by(distance_df, distance_df$sequencer, summary)
+
+ggplot(distance_df, aes(dist, fill = sequencer, alpha = .2)) + 
+  geom_density() +
+  scale_x_continuous(trans = "log10") + 
+  xlab("Distance between camoulog pairs") +
+  ylab("Sequencing technology") +
+  theme_bw() +
+   theme(panel.border = element_blank(), 
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(), 
+          axis.line = element_line(colour = "black"))
+
+ggplot(distance_df, aes(x = dist, y = sequencer, fill = sequencer, alpha = .2)) + 
+  geom_density_ridges() +
+  scale_x_continuous(trans = "log10") +
+  xlab("Distance between camoulog pairs") +
+  ylab("Sequencing technology") +
+  theme_bw() +
+   theme(panel.border = element_blank(), 
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(), 
+          axis.line = element_line(colour = "black"))
+  
+```
+
+```{r}
+camo.bed <- list()
+camo.bed[["IlluminaRL100"]] <- read_tsv("~/Documents/Research/Camo_genes/b37/illuminaRL100/illuminaRL100.b37.camo.realign.sorted.bed", col_names = c("chrom", "start", "end", "region_ids", "repeat_num"), col_types = "ciici")
+camo.bed[["IlluminaRL250"]] <- read_tsv("~/Documents/Research/Camo_genes/b37/illuminaRL250/illuminaRL250.b37.camo.realign.sorted.bed", col_names = c("chrom", "start", "end", "region_ids", "repeat_num"), col_types = "ciici")
+camo.bed[["ONT"]] <- read_tsv("~/Documents/Research/Camo_genes/b37/ONT/ONT.b37.camo.align_to.sorted.bed", col_names = c("chrom", "start", "end", "region_ids", "repeat_num"), col_types = "ciici")
+camo.bed[["PacBio"]] <- read_tsv("~/Documents/Research/Camo_genes/b37/pacBio/pacBio.b37.camo.align_to.sorted.bed", col_names = c("chrom", "start", "end", "region_ids", "repeat_num"), col_types = "ciici")
+camo.bed[["10x"]] <- read_tsv("~/Documents/Research/Camo_genes/b37/10X/10X.b37.camo.align_to.sorted.bed", col_names = c("chrom", "start", "end", "region_ids", "repeat_num"), col_types = "ciici")
+
+sequencers <- names(camo.bed) 
+camo.bed.df <- NULL
+for (seq in sequencers) {
+ camo.bed[[seq]]$sequencer <- seq
+ camo.bed.df <- rbind(camo.bed.df, camo.bed[[seq]])
+}
+camo.bed.df$sequencer %<>% factor(level = sequencers)
+
+
+by(camo.bed.df$repeat_num, camo.bed.df$sequencer, summary)
+ggplot2::ggplot(camo.bed.df, aes(x = repeat_num, fill = sequencer)) + 
+  scale_x_continuous(trans = "log10") +
+  geom_histogram(position = "dodge") + 
+  theme_bw() +
+  xlab("Repeat number") +
+  ylab("Count")
+
+ggplot2::ggplot(camo.bed.df, aes(x = repeat_num, fill = sequencer)) + 
+  scale_x_continuous(trans = "log10") +
+  geom_histogram(bins = 35, position = "dodge") + 
+  theme_bw() +
+  xlab("Repeat number") +
+  ylab("Count") +
+  theme(panel.border = element_blank(), 
+          panel.grid.major = element_blank(),
+          axis.line = element_line(colour = "black"))
+  
+
+ggplot2::ggplot(camo.bed.df, aes(x = repeat_num, y = sequencer, fill = sequencer, alpha = .2)) + 
+  scale_x_continuous(trans = "log10") +
+  geom_density_ridges() + 
+  theme_bw() +
+  xlab("Repeat number") +
+  ylab("Sequencing technology") + 
+  theme(panel.border = element_blank(), 
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(), 
+          axis.line = element_line(colour = "black"))
+```
+
+```{r}
+ill100 <- read_tsv("~/Documents/Research/Camo_genes/b37/illuminaRL100/illuminaRL100.b37.camo.align_to.sorted.bed", col_names = c("chrom", "start", "end", "region_ids", "repeat_num"), col_types = "ciici")
+sum(ill100$repeat_num < 4) / nrow(ill100)
+sum(ill100$repeat_num > 100)
+max(ill100$repeat_num)
+ill100$region_ids[which.max(ill100$repeat_num)]
+
+```
+
+```{r}
+ill100.CDS <- read_tsv("~/Downloads/illuminaRL100.b37.camo.align_to.sorted.CDS.bed", col_names = c("chrom", "start", "end", "region_ids", "repeat_num"), col_types = "ciici")
+summary(ill100.CDS)
+ggplot2::ggplot(ill100.CDS, aes(x = repeat_num)) + geom_histogram(binwidth = 1, fill="salmon") +
+  theme_bw() +
+  xlab("Repeat number") +
+  ylab("count")
+sum(ill100.CDS$repeat_num < 4) / nrow(ill100.CDS)
+sum(ill100.CDS$repeat_num >= 10)
+ill100.CDS$region_ids[which.max(ill100.CDS$repeat_num)]
+max(ill100.CDS$repeat_num)
+```
+
+```{r}
+#null.dist <- data.frame(read_tsv("HGMD/null_matrix.txt"), row.names = 1)
+empirical_p <- NULL
+ill100_camo_genes.distribution <- data.frame(read_tsv("HGMD/CDS_dark_gene_disease_associations-illumina_RL_100.txt"), row.names = 1)
+for (pheno in colnames(null.dist)) {
+  empirical_p <- c(empirical_p, sum(null.dist[[pheno]] >= ill100_camo_genes.distribution[[pheno]][1]) / nrow(null.dist))
+}
+empirical_p <- round(10*(-1*log10(empirical_p)))
+word_cloud_input <- data.frame(phenos=colnames(null.dist), emp.p = empirical_p)
+word_cloud_input <- filter(word_cloud_input, empirical_p > 0) %>% arrange(desc(emp.p)) %>% select(emp.p, phenos)
+write_tsv(x = word_cloud_input, path="enriched_gene_counts.txt", col_names = FALSE)
+```
+
+
+```{r}
+perc_dark <- read_tsv("b37/illuminaRL100/illuminaRL100.b37.percent_dark_genes.txt")
+colnames(perc_dark) <- c("gene_name", "biotype", "CDS", "UTR", "exon", "intron", "total")
+ggdefault <- gg_color_hue(5)
+ggdefault[2] = "#00BA38"
+ggdefault[3] = "#964CDF"
+for ( i in 1:5) {
+  region <- colnames(perc_dark)[2 + i]
+  filtered.perc_dark <- perc_dark[perc_dark[[region]] > 0, ]
+  plot <- ggplot(filtered.perc_dark, aes(x=filtered.perc_dark[[region]])) +
+    geom_histogram(bins = 50, fill = ggdefault[i]) +
+    xlab(paste0("Percent dark (",region,")"))
+  print(plot)
+}
+```

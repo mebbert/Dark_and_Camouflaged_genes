@@ -1,0 +1,608 @@
+---
+title: "PercentCamoGraphs"
+author: "Tanner Jensen"
+date: "9/25/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(ggplot2)
+require(gridExtra)
+require(readr)
+require(tidyr)
+require(dplyr)
+require(magrittr)
+```
+
+## GGPlot Aliases and helper functions
+```{r ggplot.helperfunctions}
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
+
+ggplot <- function(...) {
+  ggdefault <- gg_color_hue(5)
+  ggdefault[2] = "#00BA38"
+  ggdefault[3] = "#964CDF"
+  
+  ggplot2::ggplot(...) +
+    scale_fill_manual(values = ggdefault) +
+    theme_bw() + 
+    theme(panel.border = element_blank(), 
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(), 
+          axis.line = element_line(colour = "black"))
+}
+
+ggplotf <- function(...) {
+  ggdefault <- gg_color_hue(5)
+  ggdefault[2] = "#00BA38"
+  ggdefault[3] = ggdefault[4]
+  ggdefault[4] = "#964CDF"
+  ggplot2::ggplot(...) +
+    scale_fill_manual(values = ggdefault) +
+    theme_bw() + 
+    theme(panel.border = element_blank(), 
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(), 
+          axis.line = element_line(colour = "black"))
+}
+
+ggplotb <- function(...) {
+  ggplot(...) +
+    theme(axis.text.x = element_text(angle = 30, hjust = 1))
+}
+```
+
+## Read Biotype percentages for Dark Regions
+```{r biotype.dark}
+dark.biotypes <- list()
+dark.biotypes[["illuminaRL100"]] = read_tsv("b37/illuminaRL100/illuminaRL100.b37.percent_dark_biotypes.txt")
+dark.biotypes[["illuminaRL250"]] = read_tsv("b37/illuminaRL250/illuminaRL250.b37.percent_dark_biotypes.txt")
+dark.biotypes[["PacBio"]] = read_tsv("b37/pacBio/pacBio.b37.percent_dark_biotypes.txt")
+dark.biotypes[["10X"]] = read_tsv("b37/10x/10x.b37.percent_dark_biotypes.txt")
+dark.biotypes[["ONT"]] = read_tsv("b37/ONT/ONT.b37.percent_dark_biotypes.txt")
+
+dark.biotypes.df <- data.frame(biotype=dark.biotypes[[1]]$biotype)
+dark.bases.df <- data.frame(biotype=dark.biotypes[[1]]$biotype)
+for (sequencer in names(dark.biotypes)) {
+  dark.biotypes.df[[sequencer]] <- dark.biotypes[[sequencer]]$perc_region
+  dark.bases.df[[sequencer]] <- dark.biotypes[[sequencer]]$num_Region_Bases / 1000000
+}
+
+dark.biotypes.df.tidy <- gather(dark.biotypes.df, Sequencer, perc_dark, -biotype)
+dark.biotypes.df.tidy$Sequencer <- factor(dark.biotypes.df.tidy$Sequencer, levels=unique(dark.biotypes.df.tidy$Sequencer))
+dark.biotypes.df.tidy$biotype <- factor(dark.biotypes.df.tidy$biotype, levels=unique(dark.biotypes.df.tidy$biotype))
+ggplotb(dark.biotypes.df.tidy, aes(x=biotype, y=perc_dark)) +
+  geom_bar(aes(fill=Sequencer), position="dodge", stat="identity") +
+  xlab("Biotypes") +
+  ylab("Percent dark")
+
+pdf("figures/biotype_bargraph.dark.pdf")
+ggplotb(dark.biotypes.df.tidy, aes(x=biotype, y=perc_dark)) +
+  geom_bar(aes(fill=sequencer), position="dodge", stat="identity") +
+  xlab("Biotypes") +
+  ylab("Percent dark")
+dev.off()
+```
+
+```{r num_bases.gene_bodies}
+dark.bases.df.tidy <- gather(dark.bases.df, Sequencer, num_bases, -biotype)
+dark.bases.df.tidy$Sequencer <- factor(dark.bases.df.tidy$Sequencer, levels=unique(dark.bases.df.tidy$Sequencer))
+dark.bases.df.tidy$biotype <- factor(dark.bases.df.tidy$biotype, levels=unique(dark.bases.df.tidy$biotype))
+dark.bases.df.tidy <- filter(dark.bases.df.tidy, biotype == "total")
+ggplotb(dark.bases.df.tidy, aes(x=Sequencer, y=num_bases, fill=Sequencer)) +
+  geom_bar(stat="identity") +
+  xlab("Sequencer") +
+  ylab("Number of dark bases (Mb)")
+
+pdf("figures/bases_barplot.dark.gene_bodies.pdf")
+ggplotb(dark.bases.df.tidy, aes(x=Sequencer, y=num_bases, fill=Sequencer)) +
+  geom_bar(stat="identity") +
+  xlab("Sequencer") +
+  ylab("Number of dark bases (Mb)")
+dev.off()
+```
+```{r num_bases.genomeWide}
+dark.bases.df.tidy$Region <- "Gene bodies"
+dark.bases.df.tidy %<>% select(Sequencer, num_bases, Region)
+genome_wide.dark_bases <- read_tsv("~/Downloads/genome_wid.darkbases.txt")
+genome_wide.dark_bases$num_bases <- genome_wide.dark_bases$num_bases / 1000000 - dark.bases.df.tidy$num_bases
+genome_wide.dark_bases$Region <- "Genome wide"
+genome_wide.dark_bases <- rbind(genome_wide.dark_bases, dark.bases.df.tidy)
+genome_wide.dark_bases$Sequencer <- factor(genome_wide.dark_bases$Sequencer, levels=unique(genome_wide.dark_bases$Sequencer))
+genome_wide.dark_bases$Region %<>% factor(levels = c("Genome wide", "Gene bodies"))
+ggplotb(genome_wide.dark_bases, aes(x=Sequencer, y=num_bases, fill=Sequencer, alpha = Region)) +
+  geom_bar(stat="identity", position = position_stack()) +
+  xlab("Sequencing Technology") +
+  ylab("Number of dark bases (Mb)") +
+  guides(fill=FALSE) + 
+  scale_alpha_discrete(range = c(.6, 1))
+
+pdf("figures/bases_barplot.dark.genome_wide.pdf")
+ggplotb(genome_wide.dark_bases, aes(x=Sequencer, y=num_bases, fill=Sequencer)) +
+  geom_bar(stat="identity") +
+  xlab("Sequencer") +
+  labs(fill = "Sequencing technology") + 
+  ylab("Number of dark bases (Mb)")
+dev.off()
+```
+
+```{r biotype.mapq}
+mapq.biotypes <- list()
+mapq.biotypes[["illuminaRL100"]] = read_tsv("b37/illuminaRL100/illuminaRL100.b37.percent_mapq_biotypes.txt")
+mapq.biotypes[["illuminaRL250"]] = read_tsv("b37/illuminaRL250/illuminaRL250.b37.percent_mapq_biotypes.txt")
+mapq.biotypes[["PacBio"]] = read_tsv("b37/pacBio/pacBio.b37.percent_mapq_biotypes.txt")
+mapq.biotypes[["10X"]] = read_tsv("b37/10x/10x.b37.percent_mapq_biotypes.txt")
+mapq.biotypes[["ONT"]] = read_tsv("b37/ONT/ONT.b37.percent_mapq_biotypes.txt")
+
+mapq.biotypes.df <- data.frame(biotype=mapq.biotypes[[1]]$biotype)
+mapq.bases.df <- data.frame(biotype=mapq.biotypes[[1]]$biotype)
+for (sequencer in names(mapq.biotypes)) {
+  mapq.biotypes.df[[sequencer]] <- mapq.biotypes[[sequencer]]$perc_region
+  mapq.bases.df[[sequencer]] <- mapq.biotypes[[sequencer]]$num_Region_Bases / 1000000
+}
+
+mapq.biotypes.df.tidy <- gather(mapq.biotypes.df, Sequencer, perc_mapq, -biotype)
+mapq.biotypes.df.tidy$biotype <- factor(mapq.biotypes.df.tidy$biotype, levels=unique(mapq.biotypes.df.tidy$biotype))
+mapq.biotypes.df.tidy$Sequencer <- factor(mapq.biotypes.df.tidy$Sequencer, levels=unique(mapq.biotypes.df.tidy$Sequencer))
+ggplotb(mapq.biotypes.df.tidy, aes(x=biotype, y=perc_mapq)) +
+  geom_bar(aes(fill=Sequencer), position="dodge", stat="identity") +
+  xlab("Biotypes") +
+  ylab("Percent dark by low MAPQ")
+```
+
+```{r biotype.depth}
+depth.biotypes <- list()
+depth.biotypes[["illuminaRL100"]] = read_tsv("b37/illuminaRL100/illuminaRL100.b37.percent_depth_biotypes.txt")
+depth.biotypes[["illuminaRL250"]] = read_tsv("b37/illuminaRL250/illuminaRL250.b37.percent_depth_biotypes.txt")
+depth.biotypes[["PacBio"]] = read_tsv("b37/pacBio/pacBio.b37.percent_depth_biotypes.txt")
+depth.biotypes[["10X"]] = read_tsv("b37/10x/10x.b37.percent_depth_biotypes.txt")
+depth.biotypes[["ONT"]] = read_tsv("b37/ONT/ONT.b37.percent_depth_biotypes.txt")
+
+depth.biotypes.df <- data.frame(biotype=depth.biotypes[[1]]$biotype)
+depth.bases.df <- data.frame(biotype=depth.biotypes[[1]]$biotype)
+for (sequencer in names(depth.biotypes)) {
+  depth.biotypes.df[[sequencer]] <- depth.biotypes[[sequencer]]$perc_region
+  depth.bases.df[[sequencer]] <- depth.biotypes[[sequencer]]$num_Region_Bases / 1000000
+}
+
+depth.biotypes.df.tidy <- gather(depth.biotypes.df, Sequencer, perc_depth, -biotype)
+depth.biotypes.df.tidy$biotype <- factor(depth.biotypes.df.tidy$biotype, levels=unique(depth.biotypes.df.tidy$biotype))
+depth.biotypes.df.tidy$Sequencer <- factor(depth.biotypes.df.tidy$Sequencer, levels=unique(depth.biotypes.df.tidy$Sequencer))
+ggplotb(depth.biotypes.df.tidy, aes(x=biotype, y=perc_depth)) +
+  geom_bar(aes(fill=Sequencer), position="dodge", stat="identity") +
+  xlab("Biotypes") +
+  ylab("Percent dark by low depth")
+```
+
+```{r biotype.camo}
+camo.biotypes <- list()
+camo.biotypes[["illuminaRL100"]] = read_tsv("b37/illuminaRL100/illuminaRL100.b37.percent_camo_biotypes.txt")
+camo.biotypes[["illuminaRL250"]] = read_tsv("b37/illuminaRL250/illuminaRL250.b37.percent_camo_biotypes.txt")
+camo.biotypes[["PacBio"]] = read_tsv("b37/pacBio/pacBio.b37.percent_camo_biotypes.txt")
+camo.biotypes[["10X"]] = read_tsv("b37/10x/10x.b37.percent_camo_biotypes.txt")
+camo.biotypes[["ONT"]] = read_tsv("b37/ONT/ONT.b37.percent_camo_biotypes.txt")
+
+camo.biotypes.df <- data.frame(biotype=camo.biotypes[[1]]$biotype)
+for (sequencer in names(camo.biotypes)) {
+  camo.biotypes.df[[sequencer]] <- camo.biotypes[[sequencer]]$perc_region
+}
+
+camo.biotypes.df.tidy <- gather(camo.biotypes.df, Sequencer, perc_camo, -biotype)
+camo.biotypes.df.tidy$biotype <- factor(camo.biotypes.df.tidy$biotype, levels=unique(camo.biotypes.df.tidy$biotype))
+camo.biotypes.df.tidy$Sequencer <- factor(camo.biotypes.df.tidy$Sequencer, levels=unique(camo.biotypes.df.tidy$Sequencer))
+ggplotb(camo.biotypes.df.tidy, aes(x=biotype, y=perc_camo)) +
+  geom_bar(aes(fill=Sequencer), position="dodge", stat="identity") +
+  xlab("Biotypes") +
+  ylab("Percent camouflaged")
+
+pdf("figures/biotype_bargraph.camo.pdf")
+ggplotb(camo.biotypes.df.tidy, aes(x=biotype, y=perc_camo)) +
+  geom_bar(aes(fill=Sequencer), position="dodge", stat="identity") +
+  xlab("Biotypes") +
+  ylab("Percent camouflaged")
+dev.off()
+```
+
+
+## compare dark by depth and dark by mapq regions between sequencers
+```{r depth.vs.mapq}
+mapq.bases.df.tidy <- gather(mapq.bases.df, Sequencer, num_bases, -biotype)
+mapq.bases.df.tidy$Sequencer <- factor(mapq.bases.df.tidy$Sequencer, levels=unique(mapq.bases.df.tidy$Sequencer))
+mapq.bases.df.tidy$biotype <- factor(mapq.bases.df.tidy$biotype, levels=unique(mapq.bases.df.tidy$biotype))
+depth.bases.df.tidy <- gather(depth.bases.df, Sequencer, num_bases, -biotype)
+depth.bases.df.tidy$Sequencer <- factor(depth.bases.df.tidy$Sequencer, levels=unique(depth.bases.df.tidy$Sequencer))
+depth.bases.df.tidy$biotype <- factor(depth.bases.df.tidy$biotype, levels=unique(depth.bases.df.tidy$biotype))
+depth_vs_mapq <- data.frame(Sequencer = mapq.biotypes.df.tidy$Sequencer, 
+                           biotype = mapq.biotypes.df.tidy$biotype,
+                           Depth = depth.bases.df.tidy$num_bases,
+                           MAPQ = mapq.bases.df.tidy$num_bases)
+depth_vs_mapq.tidy <- gather(depth_vs_mapq, Region, num_bases, Depth, MAPQ) %>%
+                      filter(biotype == "protein coding")
+depth_vs_mapq.tidy$Region <- factor(depth_vs_mapq.tidy$Region, levels=unique(depth_vs_mapq.tidy$Region))
+pdf("figures/depth_vs_mapq.barplot.protein_coding.pdf")
+ggplot2::ggplot(depth_vs_mapq.tidy, aes(x=Sequencer, y=num_bases)) +
+  geom_bar(aes(fill=Region), position="dodge", stat="identity") +
+  xlab("Sequencing technology") +
+  ylab("Number of dark bases (Mb)") +
+    theme_bw() + 
+    theme(panel.border = element_blank(), 
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(), 
+          axis.line = element_line(colour = "black")) +
+  labs(fill = "Criteria") +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+dev.off()
+
+ggplot2::ggplot(depth_vs_mapq.tidy, aes(x=Sequencer, y=num_bases)) +
+  geom_bar(aes(fill=Region), position="dodge", stat="identity") +
+  xlab("Sequencing technology") +
+  ylab("Number of dark bases (Mb)") +
+    theme_bw() + 
+    theme(panel.border = element_blank(), 
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(), 
+          axis.line = element_line(colour = "black")) +
+  labs(fill = "Criteria") +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+```{r}
+total <- dark.biotypes.df.tidy %>% filter(biotype == "total")
+depth_vs_mapq.tidy$prop_dark <- depth_vs_mapq.tidy$perc_dark / total$perc_dark
+ggplot2::ggplot(depth_vs_mapq.tidy, aes(x=Sequencer, y=prop_dark)) +
+  geom_bar(aes(fill=Region), stat="identity") +
+  xlab("Sequencing technology") +
+  ylab("Proportion dark") +
+    theme_bw() + 
+    theme(panel.border = element_blank(), 
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(), 
+          axis.line = element_line(colour = "black")) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+
+```{r camo.vs.mapq}
+camo_vs_mapq <- data.frame(Sequencer=mapq.biotypes.df.tidy$Sequencer, 
+                           biotype=mapq.biotypes.df.tidy$biotype,
+                           camo = camo.biotypes.df.tidy$perc_camo,
+                           Mapq = mapq.biotypes.df.tidy$perc_mapq)
+camo_vs_mapq.tidy <- gather(camo_vs_mapq, Region, perc_region, camo, Mapq) %>%
+                      filter(biotype == "protein coding")
+camo_vs_mapq.tidy$Region <- factor(camo_vs_mapq.tidy$Region, levels=unique(camo_vs_mapq.tidy$Region))
+ggplot2::ggplot(camo_vs_mapq.tidy, aes(x=Sequencer, y=perc_region)) +
+  geom_bar(aes(fill=Region), position="dodge", stat="identity") +
+  xlab("Sequencing technology") +
+  ylab("Percent dark")
+```
+
+```{r AUC.geneBodies.dark}
+dark.genes <- list()
+dark.genes[["illuminaRL100"]] = read_tsv("b37/illuminaRL100/illuminaRL100.b37.percent_dark_genes.txt")
+dark.genes[["illuminaRL250"]] = read_tsv("b37/illuminaRL250/illuminaRL250.b37.percent_dark_genes.txt")
+dark.genes[["PacBio"]] = read_tsv("b37/pacBio/pacBio.b37.percent_dark_genes.txt")
+dark.genes[["10X"]] = read_tsv("b37/10x/10x.b37.percent_dark_genes.txt")
+dark.genes[["ONT"]] = read_tsv("b37/ONT/ONT.b37.percent_dark_genes.txt")
+
+max_genes_size <- 7000
+dark.gene.bodies <- data.frame(gene_num=1:max_genes_size)
+auc <- data.frame(row.names=names(dark.genes), AUC=rep(0, length(dark.genes)))
+for (sequencer in names(dark.genes)) {
+  tmp.filtered = filter(dark.genes[[sequencer]], perc_total > 0)
+  tmp.sorted = sort(tmp.filtered$perc_total, TRUE)[1:max_genes_size]
+  dark.gene.bodies[[sequencer]] <- replace_na(tmp.sorted, 0)
+  auc[sequencer, "AUC"] = round(sum(dark.gene.bodies[[sequencer]]))
+}
+auc$AUC <- round(auc$AUC / max(auc$AUC), 3)
+colnames(auc) <- c("AUC (scaled)")
+dark.gene.bodies.tidy <- gather(dark.gene.bodies, Sequencer, Perc_dark, -gene_num)
+dark.gene.bodies.tidy$Sequencer = factor(dark.gene.bodies.tidy$Sequencer, levels=unique(dark.gene.bodies.tidy$Sequencer))
+ggplotf(dark.gene.bodies.tidy, aes(x=gene_num, y=Perc_dark)) +
+  ylab("Percent dark") +
+  xlab("Rank-order gene number") + 
+  geom_bar(aes(fill=Sequencer), position="identity", stat="identity") +
+  geom_hline(yintercept = 5, color="#404040", linetype="dashed") +
+  annotation_custom(tableGrob(auc), xmin = 3000, xmax = 5000, ymin = 50, ymax=100)
+
+#save as pdf
+pdf("figures/auc_plot.dark.all_gene_bodies.pdf")
+ggplotf(dark.gene.bodies.tidy, aes(x=gene_num, y=Perc_dark)) +
+  ylab("Percent dark") +
+  xlab("Rank-order gene number") + 
+  geom_bar(aes(fill=Sequencer), position="identity", stat="identity") +
+  geom_hline(yintercept = 5, color="#404040", linetype="dashed") +
+  annotation_custom(tableGrob(auc), xmin = 3000, xmax = 5000, ymin = 50, ymax=100)
+dev.off()
+```
+```{r justILlumina.AUC.dark.geneBodies}
+ill100.dark.gene.bodies.tidy <- filter(dark.gene.bodies.tidy, Sequencer == "illuminaRL100")
+ggplot(ill100.dark.gene.bodies.tidy, aes(x=gene_num, y=Perc_dark)) +
+  ylab("Percent dark") +
+  xlab("Rank-order gene number") + 
+  geom_bar(aes(fill=Sequencer), position="identity", stat="identity") +
+  theme(legend.position = "none")
+
+pdf("figures/illumina100.auc_plot.dark.all_gene_bodies.pdf")
+ggplot(ill100.dark.gene.bodies.tidy, aes(x=gene_num, y=Perc_dark)) +
+  ylab("Percent dark") +
+  xlab("Rank-order gene number") + 
+  geom_bar(aes(fill=Sequencer), position="identity", stat="identity") +
+  theme(legend.position = "none")
+dev.off()
+```
+
+```{r AUC.geneBodies.camo}
+camo.genes <- list()
+camo.genes[["illuminaRL100"]] = read_tsv("b37/illuminaRL100/illuminaRL100.b37.percent_camo_genes.txt")
+camo.genes[["illuminaRL250"]] = read_tsv("b37/illuminaRL250/illuminaRL250.b37.percent_camo_genes.txt")
+camo.genes[["PacBio"]] = read_tsv("b37/pacBio/pacBio.b37.percent_camo_genes.txt")
+camo.genes[["10X"]] = read_tsv("b37/10x/10x.b37.percent_camo_genes.txt")
+camo.genes[["ONT"]] = read_tsv("b37/ONT/ONT.b37.percent_camo_genes.txt")
+
+max_genes_size <- 3500
+camo.gene.bodies <- data.frame(gene_num=1:max_genes_size)
+auc <- data.frame(row.names=names(camo.genes), AUC=rep(0, length(camo.genes)))
+for (sequencer in names(camo.genes)) {
+  tmp.filtered = filter(camo.genes[[sequencer]], perc_total > 0)
+  tmp.sorted = sort(tmp.filtered$perc_total, TRUE)[1:max_genes_size]
+  camo.gene.bodies[[sequencer]] <- replace_na(tmp.sorted, 0)
+  auc[sequencer, "AUC"] = round(sum(camo.gene.bodies[[sequencer]]))
+}
+auc$AUC <- round(auc$AUC / max(auc$AUC), 3)
+colnames(auc) <- c("AUC (scaled)")
+camo.gene.bodies.tidy <- gather(camo.gene.bodies, Sequencer, Perc_camo, -gene_num)
+camo.gene.bodies.tidy$Sequencer = factor(camo.gene.bodies.tidy$Sequencer, levels=unique(camo.gene.bodies.tidy$Sequencer))
+ggplotf(camo.gene.bodies.tidy, aes(x=gene_num, y=Perc_camo)) +
+  ylab("Percent camouflaged") +
+  xlab("Rank-order gene number") + 
+  geom_bar(aes(fill=Sequencer), position="identity", stat="identity") +
+  geom_hline(yintercept = 5, color="#404040", linetype="dashed") +
+  annotation_custom(tableGrob(auc), xmin = 1750, xmax = 3000, ymin = 50, ymax=100)
+
+pdf("figures/auc_plot.camo.all_gene_bodies.pdf")
+ggplotf(camo.gene.bodies.tidy, aes(x=gene_num, y=Perc_camo)) +
+  ylab("Percent camouflaged") +
+  xlab("Rank-order gene number") + 
+  geom_bar(aes(fill=Sequencer), position="identity", stat="identity") +
+  geom_hline(yintercept = 5, color="#404040", linetype="dashed") +
+  annotation_custom(tableGrob(auc), xmin = 1750, xmax = 3000, ymin = 50, ymax=100)
+dev.off()
+
+```
+
+```{r AUC.codingBodies.dark}
+dark.genes <- list()
+dark.genes[["illuminaRL100"]] = read_tsv("b37/illuminaRL100/illuminaRL100.b37.percent_dark_genes.txt")
+dark.genes[["illuminaRL250"]] = read_tsv("b37/illuminaRL250/illuminaRL250.b37.percent_dark_genes.txt")
+dark.genes[["10X"]] = read_tsv("b37/10x/10x.b37.percent_dark_genes.txt")
+dark.genes[["PacBio"]] = read_tsv("b37/pacBio/pacBio.b37.percent_dark_genes.txt")
+dark.genes[["ONT"]] = read_tsv("b37/ONT/ONT.b37.percent_dark_genes.txt")
+
+max_genes_size <- 3000
+dark.coding.bodies <- data.frame(gene_num=1:max_genes_size)
+auc <- data.frame(row.names=names(dark.genes), AUC=rep(0, length(dark.genes)))
+for (sequencer in names(dark.genes)) {
+  tmp.filtered = filter(dark.genes[[sequencer]], biotype == "protein coding", perc_total > 0)
+  tmp.sorted = sort(tmp.filtered$perc_total, TRUE)[1:max_genes_size]
+  dark.coding.bodies[[sequencer]] <- replace_na(tmp.sorted, 0)
+  auc[sequencer, "AUC"] = round(sum(dark.coding.bodies[[sequencer]]))
+}
+auc$AUC <- round(auc$AUC / max(auc$AUC), 3)
+colnames(auc) <- c("AUC (scaled)")
+dark.coding.bodies.tidy <- gather(dark.coding.bodies, Sequencer, Perc_dark, -gene_num)
+dark.coding.bodies.tidy$Sequencer = factor(dark.coding.bodies.tidy$Sequencer, levels=unique(dark.coding.bodies.tidy$Sequencer))
+ggplot(dark.coding.bodies.tidy, aes(x=gene_num, y=Perc_dark)) +
+  ylab("Percent dark") +
+  xlab("Rank-order gene number") + 
+  geom_bar(aes(fill=Sequencer), position="identity", stat="identity") +
+  geom_hline(yintercept = 5, color="#404040", linetype="dashed") +
+  annotation_custom(tableGrob(auc), xmax = 2500, ymin = 50, ymax=100)
+
+pdf("figures/auc_plot.dark.protein_coding_gene_bodies.pdf")
+ggplot(dark.coding.bodies.tidy, aes(x=gene_num, y=Perc_dark)) +
+  ylab("Percent dark") +
+  xlab("Rank-order gene number") + 
+  geom_bar(aes(fill=Sequencer), position="identity", stat="identity") +
+  geom_hline(yintercept = 5, color="#404040", linetype="dashed") +
+  annotation_custom(tableGrob(auc), xmax = 2500, ymin = 50, ymax=100)
+dev.off()
+```
+
+
+```{r AUC.codingBodies.camo}
+camo.genes <- list()
+camo.genes[["illuminaRL100"]] = read_tsv("b37/illuminaRL100/illuminaRL100.b37.percent_camo_genes.txt")
+camo.genes[["illuminaRL250"]] = read_tsv("b37/illuminaRL250/illuminaRL250.b37.percent_camo_genes.txt")
+camo.genes[["ONT"]] = read_tsv("b37/ONT/ONT.b37.percent_camo_genes.txt")
+camo.genes[["10X"]] = read_tsv("b37/10x/10x.b37.percent_camo_genes.txt")
+camo.genes[["PacBio"]] = read_tsv("b37/pacBio/pacBio.b37.percent_camo_genes.txt")
+
+max_genes_size <- 1800
+camo.coding.bodies <- data.frame(gene_num=1:max_genes_size)
+auc <- data.frame(row.names=names(camo.genes), AUC=rep(0, length(camo.genes)))
+for (sequencer in names(camo.genes)) {
+  tmp.filtered = filter(camo.genes[[sequencer]], biotype == "protein coding", perc_total > 0)
+  tmp.sorted = sort(tmp.filtered$perc_total, TRUE)[1:max_genes_size]
+  camo.coding.bodies[[sequencer]] <- replace_na(tmp.sorted, 0)
+  auc[sequencer, "AUC"] = round(sum(camo.coding.bodies[[sequencer]]))
+}
+auc$AUC <- round(auc$AUC / max(auc$AUC), 3)
+colnames(auc) <- c("AUC (scaled)")
+camo.coding.bodies.tidy <- gather(camo.coding.bodies, Sequencer, Perc_camo, -gene_num)
+camo.coding.bodies.tidy$Sequencer = factor(camo.coding.bodies.tidy$Sequencer, levels=unique(camo.coding.bodies.tidy$Sequencer))
+ggplot(camo.coding.bodies.tidy, aes(x=gene_num, y=Perc_camo)) +
+  ylab("Percent camo") +
+  xlab("Rank-order gene number") + 
+  geom_bar(aes(fill=Sequencer), position="identity", stat="identity") +
+  geom_hline(yintercept = 5, color="#404040", linetype="dashed") +
+  annotation_custom(tableGrob(auc), xmax = 1500, ymin = 50, ymax=100)
+
+pdf("figures/auc_plot.camo.protein_coding_gene_bodies.pdf")
+ggplot(camo.coding.bodies.tidy, aes(x=gene_num, y=Perc_camo)) +
+  ylab("Percent camo") +
+  xlab("Rank-order gene number") + 
+  geom_bar(aes(fill=Sequencer), position="identity", stat="identity") +
+  geom_hline(yintercept = 5, color="#404040", linetype="dashed") +
+  annotation_custom(tableGrob(auc), xmax = 1500, ymin = 50, ymax=100)
+dev.off()
+```
+
+```{r AUC.codingExon.dark}
+max_genes_size <- 1250
+dark.genes.coding.exons <- data.frame(gene_num=1:max_genes_size)
+auc <- data.frame(row.names=names(dark.genes), AUC=rep(0, length(dark.genes)))
+for (sequencer in names(dark.genes)) {
+  tmp.filtered = filter(dark.genes[[sequencer]], biotype == "protein coding", perc_exon > 0)
+  tmp.sorted = sort(tmp.filtered$perc_exon, TRUE)[1:max_genes_size]
+  dark.genes.coding.exons[[sequencer]] <- replace_na(tmp.sorted, 0)
+  auc[sequencer, "AUC"] = round(sum(dark.genes.coding.exons[[sequencer]]))
+}
+auc$AUC <- round(auc$AUC / max(auc$AUC), 3)
+colnames(auc) <- c("AUC (scaled)")
+dark.genes.coding.exons.tidy <- gather(dark.genes.coding.exons, Sequencer, Perc_dark, -gene_num)
+dark.genes.coding.exons.tidy$Sequencer = factor(dark.genes.coding.exons.tidy$Sequencer, levels=unique(dark.genes.coding.exons.tidy$Sequencer))
+ggplot(dark.genes.coding.exons.tidy, aes(x=gene_num, y=Perc_dark)) +
+  ylab("Percent dark") +
+  xlab("Rank-order gene number") + 
+  geom_bar(aes(fill=Sequencer), position="identity", stat="identity") +
+  geom_hline(yintercept = 5, color="#404040", linetype="dashed") +
+  annotation_custom(tableGrob(auc), xmin = 700, xmax = 950, ymin = 50, ymax=100)
+
+pdf("figures/auc_plot.dark.protein_coding_gene_bodies.exons.pdf")
+ggplot(dark.genes.coding.exons.tidy, aes(x=gene_num, y=Perc_dark)) +
+  ylab("Percent dark") +
+  xlab("Rank-order gene number") + 
+  geom_bar(aes(fill=Sequencer), position="identity", stat="identity") +
+  geom_hline(yintercept = 5, color="#404040", linetype="dashed") +
+  annotation_custom(tableGrob(auc), xmin = 700, xmax = 950, ymin = 50, ymax=100)
+dev.off()
+```
+
+```{r AUC.codingExon.camo}
+max_genes_size <- 800
+camo.genes.coding.exon <- data.frame(gene_num=1:max_genes_size)
+auc <- data.frame(row.names=names(camo.genes), AUC=rep(0, length(camo.genes)))
+for (sequencer in names(camo.genes)) {
+  tmp.filtered = filter(camo.genes[[sequencer]], biotype == "protein coding", perc_exon > 0)
+  tmp.sorted = sort(tmp.filtered$perc_exon, TRUE)[1:max_genes_size]
+  camo.genes.coding.exon[[sequencer]] <- replace_na(tmp.sorted, 0)
+  auc[sequencer, "AUC"] = round(sum(camo.genes.coding.exon[[sequencer]]))
+}
+auc$AUC <- round(auc$AUC / max(auc$AUC), 3)
+colnames(auc) <- c("AUC (scaled)")
+camo.genes.coding.exon.tidy <- gather(camo.genes.coding.exon, Sequencer, Perc_camo, -gene_num)
+camo.genes.coding.exon.tidy$Sequencer = factor(camo.genes.coding.exon.tidy$Sequencer, levels=unique(camo.genes.coding.exon.tidy$Sequencer))
+ggplot(camo.genes.coding.exon.tidy, aes(x=gene_num, y=Perc_camo)) +
+  ylab("Percent camouflaged") +
+  xlab("Rank-order gene number") + 
+  geom_bar(aes(fill=Sequencer), position="identity", stat="identity") +
+  geom_hline(yintercept = 5, color="#404040", linetype="dashed") +
+  annotation_custom(tableGrob(auc), xmin = 400, xmax = 600, ymin = 50, ymax=100)
+
+pdf("figures/auc_plot.camo.protein_coding_gene_bodies.exons.pdf")
+ggplot(camo.genes.coding.exon.tidy, aes(x=gene_num, y=Perc_camo)) +
+  ylab("Percent camouflaged") +
+  xlab("Rank-order gene number") + 
+  geom_bar(aes(fill=Sequencer), position="identity", stat="identity") +
+  geom_hline(yintercept = 5, color="#404040", linetype="dashed") +
+  annotation_custom(tableGrob(auc), xmin = 400, xmax = 600, ymin = 50, ymax=100)
+dev.off()
+```
+
+```{r AUC.CDS.dark}
+max_genes_size <- 800
+dark.genes.coding <- data.frame(gene_num=1:max_genes_size)
+auc <- data.frame(row.names=names(dark.genes), AUC=rep(0, length(dark.genes)))
+for (sequencer in names(dark.genes)) {
+  tmp.filtered = filter(dark.genes[[sequencer]], biotype == "protein coding", perc_CDS > 0)
+  tmp.sorted = sort(tmp.filtered$perc_CDS, TRUE)[1:max_genes_size]
+  dark.genes.coding[[sequencer]] <- replace_na(tmp.sorted, 0)
+  auc[sequencer, "AUC"] = round(sum(dark.genes.coding[[sequencer]]))
+}
+auc$AUC <- round(auc$AUC / max(auc$AUC), 3)
+colnames(auc) <- c("AUC (scaled)")
+dark.genes.coding.tidy <- gather(dark.genes.coding, Sequencer, Perc_dark, -gene_num)
+dark.genes.coding.tidy$Sequencer = factor(dark.genes.coding.tidy$Sequencer, levels=unique(dark.genes.coding.tidy$Sequencer))
+ggplot(dark.genes.coding.tidy, aes(x=gene_num, y=Perc_dark)) +
+  ylab("Percent dark") +
+  xlab("Rank-order gene number") + 
+  geom_bar(aes(fill=Sequencer), position="identity", stat="identity") +
+  geom_hline(yintercept = 5, color="#404040", linetype="dashed") +
+  annotation_custom(tableGrob(auc), xmin = 500, xmax = 650, ymin = 50, ymax=100)
+
+pdf("figures/auc_plot.dark.protein_coding_gene_bodies.CDS.pdf")
+ggplot(dark.genes.coding.tidy, aes(x=gene_num, y=Perc_dark)) +
+  ylab("Percent dark") +
+  xlab("Rank-order gene number") + 
+  geom_bar(aes(fill=Sequencer), position="identity", stat="identity") +
+  geom_hline(yintercept = 5, color="#404040", linetype="dashed") +
+  annotation_custom(tableGrob(auc), xmin = 500, xmax = 650, ymin = 50, ymax=100)
+dev.off()
+```
+
+```{r AUC.CDS.camo}
+max_genes_size <- 510
+camo.genes.coding <- data.frame(gene_num=1:max_genes_size)
+auc <- data.frame(row.names=names(camo.genes), AUC=rep(0, length(camo.genes)))
+for (sequencer in names(camo.genes)) {
+  tmp.filtered = filter(camo.genes[[sequencer]], biotype == "protein coding", perc_CDS > 0)
+  tmp.sorted = sort(tmp.filtered$perc_CDS, TRUE)[1:max_genes_size]
+  camo.genes.coding[[sequencer]] <- replace_na(tmp.sorted, 0)
+  auc[sequencer, "AUC"] = round(sum(camo.genes.coding[[sequencer]]))
+}
+auc$AUC <- round(auc$AUC / max(auc$AUC), 3)
+colnames(auc) <- c("AUC (scaled)")
+camo.genes.coding.tidy <- gather(camo.genes.coding, Sequencer, Perc_camo, -gene_num)
+camo.genes.coding.tidy$Sequencer = factor(camo.genes.coding.tidy$Sequencer, levels=unique(camo.genes.coding.tidy$Sequencer))
+ggplot(camo.genes.coding.tidy, aes(x=gene_num, y=Perc_camo)) +
+  ylab("Percent camouflaged") +
+  xlab("Rank-order gene number") + 
+  geom_bar(aes(fill=Sequencer), position="identity", stat="identity") +
+  geom_hline(yintercept = 5, color="#404040", linetype="dashed") +
+  annotation_custom(tableGrob(auc), xmin = 300, xmax = 500, ymin = 50, ymax=100)
+
+pdf("figures/auc_plot.camo.protein_coding_gene_bodies.CDS.pdf")
+ggplot(camo.genes.coding.tidy, aes(x=gene_num, y=Perc_camo)) +
+  ylab("Percent camouflaged") +
+  xlab("Rank-order gene number") + 
+  geom_bar(aes(fill=Sequencer), position="identity", stat="identity") +
+  geom_hline(yintercept = 5, color="#404040", linetype="dashed") +
+  annotation_custom(tableGrob(auc), xmin = 300, xmax = 500, ymin = 50, ymax=100)
+dev.off()
+```
+
+## Protein Gene Body element 
+```{r}
+camo.genebody_element <- list()
+camo.genebody_element[["illuminaRL100"]] = read_tsv("b37/illuminaRL100/illuminaRL100.b37.percent_camo_coding_regions.txt")
+camo.genebody_element[["illuminaRL250"]] = read_tsv("b37/illuminaRL250/illuminaRL250.b37.percent_camo_coding_regions.txt")
+camo.genebody_element[["ONT"]] = read_tsv("b37/ONT/ONT.b37.percent_camo_coding_regions.txt")
+camo.genebody_element[["PacBio"]] = read_tsv("b37/pacBio/pacBio.b37.percent_camo_coding_regions.txt")
+camo.genebody_element[["10X"]] = read_tsv("b37/10x/10x.b37.percent_camo_coding_regions.txt")
+
+camo.genebody_element.df <- data.frame(region_type=camo.genebody_element[[1]]$region_type)
+for (sequencer in names(camo.genebody_element)) {
+  camo.genebody_element.df[[sequencer]] <- camo.genebody_element[[sequencer]]$perc_region
+}
+camo.genebody_element.df %<>% filter(region_type != "exon")
+
+camo.genebody_element.df.tidy <- gather(camo.genebody_element.df, Sequencer, perc_camo, -region_type)
+camo.genebody_element.df.tidy$region_type <- factor(camo.genebody_element.df.tidy$region_type, levels=unique(camo.genebody_element.df.tidy$region_type))
+camo.genebody_element.df.tidy$Sequencer <- factor(camo.genebody_element.df.tidy$Sequencer, levels=unique(camo.genebody_element.df.tidy$Sequencer))
+ggplotb(camo.genebody_element.df.tidy, aes(x=region_type, y=perc_camo)) +
+  geom_bar(aes(fill=Sequencer), position="dodge", stat="identity") +
+  xlab("Gene body element") +
+  ylab("Percent camouflaged")
+
+pdf("figures/region_type_bargraph.camo.pdf")
+ggplotb(camo.genebody_element.df.tidy, aes(x=region_type, y=perc_camo)) +
+  geom_bar(aes(fill=Sequencer), position="dodge", stat="identity") +
+  xlab("Gene body element") +
+  ylab("Percent camouflaged")
+dev.off()
+```
+

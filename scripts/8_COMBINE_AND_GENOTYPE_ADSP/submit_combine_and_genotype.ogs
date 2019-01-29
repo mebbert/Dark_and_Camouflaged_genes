@@ -1,0 +1,32 @@
+#!/bin/bash
+
+GVCF_DIR=$1
+GATK_bed=$2
+RESULT_DIR=$3
+CAMO_MASK_REF_PREFIX=$4
+GATK_JAR=$5
+
+for dir in ${GVCF_DIR}/*
+do
+	ploidy=$(basename $dir)
+	repeat=$((${ploidy##*_} / 2))
+	result_dir="${RESULT_DIR}/genotyped_by_region/${ploidy}"
+	mkdir -p $result_dir
+
+	gvcf_list="${ploidy}.gvcfs.list"
+	find $dir -name "*.g.vcf" > $gvcf_list 
+
+	REF="${CAMO_MASK_REF_PREFIX}$(($repeat * 2)).fa"
+	echo $repeat
+	awk "\$5 == $repeat {print \$1\":\"\$2\"-\"\$3}" $GATK_bed | \
+		while read region 
+		do 
+			echo $region 
+			qsub combine_and_genotype.ogs 
+					$gvcf_list \
+					$region \
+					$result_dir \
+					$REF \
+					$GATK_JAR
+		done
+done

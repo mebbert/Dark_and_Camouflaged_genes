@@ -1,0 +1,348 @@
+---
+title: "ADSP Camo Gene Variant Filtering"
+author: "Tanner Jensen"
+date: "12/4/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(readr)
+require(ggplot2)
+require(dplyr)
+require(magrittr)
+require(GGally)
+```
+```{r}
+variant.metrics <- read_tsv("~/Downloads/annotated.intersected.CDS.variant_metrics.txt")
+```
+
+```{r}
+table(variant.metrics$type)
+table(variant.metrics$set)
+variant.metrics %<>% filter(set %in% c(paste0("ploidy_", c(4,6,8,10))))
+table(variant.metrics$set)
+table(variant.metrics$type)
+```
+```{r}
+variant.metrics$pass = TRUE
+table(variant.metrics$PASS)
+table(variant.metrics$subtype)
+summary(variant.metrics)
+```
+
+```{r}
+snp.metrics <- variant.metrics[variant.metrics$type == "SNP",]
+indel.metrics <- variant.metrics[variant.metrics$type == "INDEL",]
+summary(snp.metrics)
+summary(indel.metrics)
+```
+
+```{r}
+by(snp.metrics, snp.metrics$set, summary)
+```
+
+
+```{r}
+ggplot(snp.metrics, aes(set, MQ)) + geom_violin() 
+ggplot(CR1.metrics, aes(set, QD)) + geom_violin()
+```
+## SNP METRIC DISTRIBUTIONS 
+## QD
+```{r}
+ggplot(snp.metrics, aes(QD)) + geom_density() + geom_vline(xintercept = 2, color = "red") + annotate("rect", xmin=-Inf, xmax = 2, ymin = 0, ymax = Inf, alpha = .2, fill = "red") + ggtitle("QD (SNPs)")
+```
+
+## FS
+```{r}
+ggplot(snp.metrics, aes(FS)) + geom_density() + geom_vline(xintercept = 60, color = "red") + annotate("rect", xmin=60, xmax=Inf, ymin=0, ymax=Inf, alpha = .2, fill = "red")  +  ggtitle("FS (SNPs)")
+```
+
+## MQ
+```{r}
+ggplot(snp.metrics, aes(MQ)) + geom_density() + geom_vline(xintercept = 40, color = "red") + annotate("rect", xmin=-Inf, xmax=40, ymin=0, ymax=Inf, alpha=.2, fill="red") + ggtitle("MQ (SNPs)")
+snp.metrics.filtered <- filter(snp.metrics, MQ < 200) 
+ggplot(snp.metrics.filtered, aes(MQ)) + geom_density() + geom_vline(xintercept = 40, color = "red") + annotate("rect", xmin=-Inf, xmax=40, ymin=0, ymax=Inf, alpha=.2, fill="red") + ggtitle("MQ (SNPs)")
+```
+
+## MQRankSum
+```{r}
+ggplot(snp.metrics, aes(MQRankSum)) + geom_density() + geom_vline(xintercept = -12.5, color = "red") + annotate("rect", xmin=-Inf, xmax= -12.5, ymin=0,ymax=Inf, alpha=.2, fill="red") + ggtitle("MQRankSum (SNPs)")
+```
+
+## ReadPosRankSum
+```{r}
+ggplot(snp.metrics, aes(ReadPosRankSum)) + geom_density() + geom_vline(xintercept = -8, color = "red") + annotate("rect", xmin=-Inf, xmax=-8, ymin=0, ymax=Inf, alpha=.2, fill="red") + ggtitle("ReadPosRankSum (SNPs)")
+```
+## Inbreeding Coeff
+```{r}
+ggplot(snp.metrics, aes(InbreedingCoeff)) + geom_density() + geom_vline(xintercept = .7, color = "red") + annotate("rect", xmin=.7, xmax = Inf, ymin = 0, ymax = Inf, alpha = .2, fill = "red") + ggtitle("InbreedingCoeff (Indels)")
+```
+
+#INDEL cutoffs
+```{r}
+ggplot(indel.metrics, aes(QD)) + geom_density() + geom_vline(xintercept = 2, color = "red") + annotate("rect", xmin=-Inf, xmax = 2, ymin = 0, ymax = Inf, alpha = .2, fill = "red") + ggtitle("QD (Indels)")
+```
+
+#FS
+```{r}
+ggplot(indel.metrics, aes(FS)) + geom_density() + geom_vline(xintercept = 200, color = "red") + annotate("rect", xmin=200, xmax = Inf, ymin = 0, ymax = Inf, alpha = .2, fill = "red") + ggtitle("FS (Indels)")
+```
+
+## ReadPosRankSum
+```{r}
+ggplot(indel.metrics, aes(ReadPosRankSum)) + geom_density() + geom_vline(xintercept = -20, color = "red") + annotate("rect", xmin=-Inf, xmax=-20, ymin=0, ymax=Inf, alpha=.2, fill="red") + ggtitle("ReadPosRankSum (Indels)")
+```
+```{r}
+ggplot(indel.metrics, aes(InbreedingCoeff)) + geom_density() + geom_vline(xintercept = .7, color = "red") + annotate("rect", xmin=.7, xmax = Inf, ymin = 0, ymax = Inf, alpha = .2, fill = "red") + ggtitle("InbreedingCoeff (Indels)")
+```
+
+## Do the Filtering for SNPS
+```{r}
+#originally set all SNPS as passed
+snp.metrics$pass <- TRUE
+table(snp.metrics$pass)
+
+## Remove Homo-Singletons
+snp.metrics$pass <- ifelse(snp.metrics$InbreedingCoeff == Inf, yes = FALSE, no = snp.metrics$pass)
+table(snp.metrics$pass)
+ggplot(snp.metrics, aes(QD, group=pass, fill=pass, alpha=.2)) + geom_density() + geom_vline(xintercept = 2, color = "red")
+ggplot(snp.metrics, aes(FS, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(snp.metrics, aes(MQ, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(snp.metrics, aes(MQRankSum, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(snp.metrics, aes(ReadPosRankSum, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(snp.metrics, aes(InbreedingCoeff, group=pass, fill=pass, alpha=.2)) + geom_density()
+```
+
+```{r}
+# Apply 
+snp.metrics$pass <- ifelse(snp.metrics$QD < 5, yes = FALSE, no = snp.metrics$pass)
+table(snp.metrics$pass)
+ggplot(snp.metrics, aes(QD, group=pass, fill=pass, alpha=.2)) + geom_density() + geom_vline(xintercept = 2, color = "red")
+ggplot(snp.metrics, aes(FS, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(snp.metrics, aes(MQ, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(snp.metrics, aes(MQRankSum, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(snp.metrics, aes(ReadPosRankSum, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(snp.metrics, aes(InbreedingCoeff, group=pass, fill=pass, alpha=.2)) + geom_density()
+```
+
+```{r}
+## Apply MQ cutoff
+snp.metrics$pass <- ifelse(snp.metrics$MQ < 40, yes = FALSE, no = snp.metrics$pass)
+snp.metrics$pass <- ifelse(snp.metrics$MQ > 100, yes = FALSE, no = snp.metrics$pass)
+table(snp.metrics$pass)
+ggplot(snp.metrics, aes(QD, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(snp.metrics, aes(FS, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(snp.metrics, aes(MQ, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(snp.metrics, aes(MQRankSum, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(snp.metrics, aes(ReadPosRankSum, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(snp.metrics, aes(InbreedingCoeff, group=pass, fill=pass, alpha=.2)) + geom_density()
+```
+```{r}
+## Apply Inbreeding cutoff
+snp.metrics$pass <- ifelse(snp.metrics$InbreedingCoeff < -.3, yes = FALSE, no = snp.metrics$pass)
+snp.metrics$pass <- ifelse(snp.metrics$InbreedingCoeff > .8, yes = FALSE, no = snp.metrics$pass)
+table(snp.metrics$pass)
+ggplot(snp.metrics, aes(QD, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(snp.metrics, aes(FS, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(snp.metrics, aes(MQ, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(snp.metrics, aes(MQRankSum, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(snp.metrics, aes(ReadPosRankSum, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(snp.metrics, aes(InbreedingCoeff, group=pass, fill=pass, alpha=.2)) + geom_density()
+```
+
+```{r}
+indel.metrics$pass <- TRUE
+table(indel.metrics$pass)
+
+## Filter out homo-singletons
+indel.metrics$pass <- ifelse(indel.metrics$InbreedingCoeff == Inf, yes = FALSE, no = indel.metrics$pass)
+table(indel.metrics$pass)
+ggplot(snp.metrics, aes(QD, group=pass, fill=pass, alpha=.2)) + geom_density() + geom_vline(xintercept = 2, color = "red")
+ggplot(snp.metrics, aes(FS, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(snp.metrics, aes(MQ, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(snp.metrics, aes(MQRankSum, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(snp.metrics, aes(ReadPosRankSum, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(snp.metrics, aes(InbreedingCoeff, group=pass, fill=pass, alpha=.2)) + geom_density()
+```
+
+# Create gridsearch function to optimize cutoffs
+```{r}
+
+getCutoffIndices <- function(n, k, l) {
+  indices <- NULL
+  for (i in 1:l) {
+    indices <- c(n %% k, indices)
+    n <- n %/% k
+  }
+  return(indices + 1)
+}
+
+gridSearch <- function(data, features = NULL, range = c(0,1), k = 10) {
+  l <- length(features)
+  quantiles <- lapply(features, function(x) quantile(data[[x]], probs = seq(0, 1, 1/k)))
+  result <- NULL
+  for (i in 1:k^l) {
+      cutoffind <- getCutoffIndices(i, k, l)
+      test <- rep(TRUE, nrow(data))
+      for(i in 1:length(cutoffind)) {
+        test <- ifelse(data[[features[i]]] < quantiles[[i]][cutoffind[i]], yes = FALSE, no = test)
+      }
+      TiTv <- table(data[test,"subtype"])
+      result <- c(result, (1 - abs((TiTv[1] + 1)/(TiTv[2] + 1) - 2)) * sum(test))
+  }
+  max <- which.max(result)
+  cat(paste0("Optimized Ti/Tv: ", result[max], "\n"))
+  cutoff <- getCutoffIndices(max, k, l)
+  cat("Suggested cutoffs:\n")
+  for (i in 1:l) {
+    cat(paste0("\t",features[i],"\t: ", quantiles[[i]][[cutoff[i]]], "\n"))
+  }
+}
+
+#gridSearch(snp.metrics, c("QD", "MQ", "InbreedingCoeff"), k = 10)
+```
+```{r}
+snp.metrics$subtype <- factor(snp.metrics$subtype, levels = c("Ti", "Tv"))
+table(snp.metrics$subtype)
+```
+
+```{r}
+CR1.metrics <- read_tsv("~/Downloads/CR1.metrics.txt")
+table(CR1.metrics$PASS)
+CR1.metrics %<>% filter(PASS == "PASS")
+table(CR1.metrics$type)
+CR1.snps <- filter(CR1.metrics, type == "SNP")
+summary(CR1.snps)
+table(CR1.snps$subtype)
+CR1.snps$pass <- TRUE
+ggplot(CR1.snps, aes(QD, fill = pass, alpha = .4)) + geom_density()
+ggplot(CR1.snps, aes(FS)) + geom_density()
+ggplot(CR1.snps, aes(SOR)) + geom_density()
+ggplot(CR1.snps, aes(MQ)) + geom_density()
+ggplot(CR1.snps, aes(MQRankSum)) + geom_density()
+ggplot(CR1.snps, aes(GQ_MEAN)) + geom_density()
+ggplot(CR1.snps, aes(GQ_STDDEV)) + geom_density()
+ggplot(CR1.snps, aes(InbreedingCoeff)) + geom_density()
+``` 
+```{r}
+CR1.snps %<>% filter(!is.na(QD))
+gridSearch(CR1.snps, features = c("QD", "MQ", "GQ_MEAN"), k = 25)
+```
+```{r}
+CR1.snps$pass <- TRUE
+CR1.snps$pass <- ifelse(CR1.snps$QD < 2.22, yes = FALSE, no = CR1.snps$pass)
+CR1.snps$pass <- ifelse(CR1.snps$MQ < 38.22, yes = FALSE, no = CR1.snps$pass)
+CR1.snps$pass <- ifelse(CR1.snps$GQ_MEAN < 13.2252, yes = FALSE, no = CR1.snps$pass)
+table(CR1.snps$subtype[CR1.snps$pass])
+```
+
+```{r}
+variant.metrics$pass <- ifelse(variant.metrics$PASS == "PASS", yes = TRUE, no = FALSE)
+variant.metrics$pass <- ifelse(variant.metrics$QD < 2, yes = FALSE, no = variant.metrics$pass)
+variant.metrics$pass <- ifelse(variant.metrics$MQ < 40, yes = FALSE, no = variant.metrics$pass)
+table(variant.metrics$subtype[variant.metrics$pass])
+```
+
+```{r}
+table(CR1.metrics$PASS)
+table(CR1.metrics$subtype)
+CR1.metrics$pass <- ifelse(CR1.metrics$PASS == "PASS", yes = T, no = F)
+table(CR1.metrics$pass)
+CR1.metrics$pass <- ifelse(CR1.metrics$QD < .66667, yes = FALSE, no = variant.metrics$pass)
+table(CR1.metrics$pass)
+table(CR1.metrics$subtype[CR1.metrics$pass])
+```
+
+
+```{r}
+nocleaning.CR1 <- read_tsv("~/Downloads/nocleaning.CR1.metrics.txt")
+```
+```{r}
+ggplot(nocleaning.CR1, aes(AF, fill = "salmon", alpha = .25)) +
+  geom_density() +
+  scale_x_continuous(trans = "log10")
+```
+
+```{r}
+titv <- function(variants) {
+  variants %<>% filter(pass)
+  return(sum(variants$subtype == "Ti") / sum(variants$subtype == "Tv"))
+}
+```
+
+```{r}
+CDS.variants <- read_tsv("~/Downloads/annotated.intersected.inbreeding.CDS.metrics.txt")
+CDS.variants %<>% filter(!is.na(QD))
+summary(CDS.variants)
+```
+
+```{r}
+table(CDS.variants$PASS)
+CDS.variants$pass <- ifelse(CDS.variants$PASS == "PASS", yes = T, no = F)
+ggplot(CDS.variants, aes(QD, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(CDS.variants, aes(FS, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(CDS.variants, aes(MQ, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(CDS.variants, aes(MQRankSum, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(CDS.variants, aes(ReadPosRankSum, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(CDS.variants, aes(InbreedingCoeff, group=pass, fill=pass, alpha=.2)) + geom_density()
+titv(CDS.variants)
+```
+
+```{r}
+CDS.variants$pass <- ifelse(CDS.variants$QD < 2.5, yes = F, no = CDS.variants$pass)
+ggplot(CDS.variants, aes(QD, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(CDS.variants, aes(FS, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(CDS.variants, aes(MQ, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(CDS.variants, aes(MQRankSum, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(CDS.variants, aes(ReadPosRankSum, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(CDS.variants, aes(InbreedingCoeff, group=pass, fill=pass, alpha=.2)) + geom_density()
+titv(CDS.variants)
+table(CDS.variants$pass)
+```
+
+```{r}
+CDS.variants$pass <- ifelse(CDS.variants$InbreedingCoeff > .2, yes = F, no = CDS.variants$pass)
+titv(CDS.variants)
+table(CDS.variants$pass)
+```
+
+```{r}
+CDS.variants$pass <- ifelse(CDS.variants$PASS == "PASS", yes = T, no = F)
+CDS.variants$pass
+qd.results <- NULL
+for ( QD_cutoff in seq(from = 0, to = 10, by = .25)) {
+  tmp <- filter(CDS.variants, QD > QD_cutoff)
+  num_variants <- sum(tmp$pass)
+  variant_titv <- titv(tmp)
+  qd.results <- rbind(qd.results, c(QD_cutoff, num_variants, variant_titv))
+}
+qd.results <- as.data.frame(qd.results)
+colnames(qd.results) <- c("QD_cutoff", "num_Variants", "TiTv")
+print(qd.results)
+```
+```{r}
+ggplot(qd.results, aes(QD_cutoff, TiTv)) + geom_line()
+ggplot(qd.results, aes(QD_cutoff, num_Variants)) + geom_line()
+```
+
+```{r}
+CDS.variants$pass <- ifelse(CDS.variants$PASS == "PASS", yes = T, no = F)
+CDS.variants$pass <- ifelse(CDS.variants$QD < 5, yes = F, no = CDS.variants$pass)
+ic.results <- NULL
+for ( IC_cutoff in seq(from = 0.1, to = 1, by = .1)) {
+  tmp <- filter(CDS.variants, InbreedingCoeff < IC_cutoff)
+  num_variants <- sum(tmp$pass)
+  variant_titv <- titv(tmp)
+  ic.results <- rbind(ic.results, c(IC_cutoff, num_variants, variant_titv))
+}
+ic.results <- as.data.frame(ic.results)
+colnames(ic.results) <- c("IC_cutoff", "num_Variants", "TiTv")
+print(ic.results)
+```
+```{r}
+t <- ggplot(ic.results, aes(IC_cutoff, TiTv)) + geom_line()
+n <- ggplot(ic.results, aes(IC_cutoff, num_Variants)) + geom_line()
+plot_grid(t, n, labels = c("QD > 5", ""))
+```
+
