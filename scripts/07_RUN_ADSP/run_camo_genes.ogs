@@ -1,8 +1,8 @@
 #!/bin/bash
 #$ -cwd  ## start job in current working directory (where it's submitted from)
 #$ -N Camo_run_CR1 ## job name
-#$ -q 1-day  ## queue
-#$ -M jensen.tanner@mayo.edu  ## email
+#$ -q <queue>  ## queue
+#$ -M email@institution.edu  ## email
 #$ -pe threaded 1
 #$ -l h_vmem=32G  ## Memory request
 #$ -j y
@@ -64,8 +64,8 @@ ref_prefix=$4
 filtered_bam_list=$5
 DATA_DEST_DIR=$6
 
-# GATK=gatk_3.7
-GATK="java -Xmx24g -jar /mforge/research/labs/moleneurosci/petrucelli/m199515/tools/GenomeAnalysisTK-3.8-1-0-gf15c1c3ef/GenomeAnalysisTK.jar"
+GATK_path=path/to/gatk.jar
+GATK="java -Xmx24g -jar $GATK_path"
 
 bam_list=${TEMPORARY_DIR}/bam_list.txt
 

@@ -1,8 +1,8 @@
 #!/bin/bash
 #$ -cwd  ## start job in current working directory (where it's submitted from)
 #$ -N Combine_and_GenotypeGVCFs_ADSP  ## job name
-#$ -q 1-day  ## queue
-#$ -M jensen.tanner@mayo.edu  ## email
+#$ -q <queue>  ## queue
+#$ -M email@institution.edu  ## email
 #$ -pe threaded 1
 #$ -l h_vmem=48G  ## Memory request
 #$ -notify  ## tells OGS to allow a 'trap'

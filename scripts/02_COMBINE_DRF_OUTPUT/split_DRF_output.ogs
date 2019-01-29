@@ -1,7 +1,7 @@
 #!/bin/bash
 #$ -cwd  
 #$ -N 'Combine_DRF'
-#$ -q 1-day  
+#$ -q <queue>
 #$ -M email@institution.edu  
 #$ -pe threaded 1
 #$ -l h_vmem=2G  

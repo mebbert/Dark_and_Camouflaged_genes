@@ -1,8 +1,8 @@
 #!/bin/bash
 #$ -cwd  
 #$ -N 'Make_camo_bed'
-#$ -q 1-day  
-#$ -M jensen.tanner@mayo.edu  
+#$ -q <queue>
+#$ -M email@institution.edu  
 #$ -pe threaded 16
 #$ -l h_vmem=8G  
 #$ -notify  
