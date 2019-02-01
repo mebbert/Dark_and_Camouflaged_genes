@@ -1,6 +1,6 @@
 #!/bin/bash
 #$ -cwd  ## start job in current working directory (where it's submitted from)
-#$ -N Camo_run_CR1 ## job name
+#$ -N Camo_run ## job name
 #$ -q <queue>  ## queue
 #$ -M email@institution.edu  ## email
 #$ -pe threaded 1
@@ -58,14 +58,15 @@ gatk_bed=$3
 
 threads=1
 
+GATK_path=$4
+GATK="java -Xmx24g -jar $GATK_path"
+
 #Path prefix to camo-masked references
 # Should look like: path/to/refs/b37-camo_mask
-ref_prefix=$4
-filtered_bam_list=$5
-DATA_DEST_DIR=$6
+ref_prefix=$5
+filtered_bam_list=$6
+DATA_DEST_DIR=$7
 
-GATK_path=path/to/gatk.jar
-GATK="java -Xmx24g -jar $GATK_path"
 
 bam_list=${TEMPORARY_DIR}/bam_list.txt
 
@@ -74,8 +75,8 @@ echo "sed \"${sample_range}!d\" $filtered_bam_list > $bam_list"
 sed "${sample_range}!d" $filtered_bam_list > $bam_list
 
 
-# Regex to extract SRR sample name from path 
-regex=".*\/ADSP\/[_A-Za-z0-9]+\/bam\/s_(.+).bam"
+# Regex to extract sample name from Bam header
+regex="SM:([A-Za-z0-9\-]+)"
 
 max_repeat=5
 for repeat_num in $(seq 2 1 $max_repeat)
@@ -89,7 +90,8 @@ done
 while read bam
 do
 
-	[[ $bam =~ $regex ]]
+	RG=$(samtools view -H $bam | grep '^@RG' | tail -1)
+	[[ $RG =~ $regex ]]
 	sampleName=${BASH_REMATCH[1]}
 
 	echo "Sample name: $sampleName"
