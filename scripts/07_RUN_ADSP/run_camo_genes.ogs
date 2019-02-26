@@ -76,7 +76,7 @@ sed "${sample_range}!d" $filtered_bam_list > $bam_list
 
 
 # Regex to extract sample name from Bam header
-regex="SM:([A-Za-z0-9\-]+)"
+regex="SM:([A-Za-z0-9_\-]+)"
 
 max_repeat=5
 for repeat_num in $(seq 2 1 $max_repeat)
