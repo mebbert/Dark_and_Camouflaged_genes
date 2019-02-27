@@ -50,9 +50,9 @@ def main(DRF_bed_list_file, combined_low_depth, combined_low_mapq):
 			out_line = "%s\t%d\t%d\t%f\t%f\t%f\n" % (chrom, start, start + 1, avgMapQBelowThresh, avgDepth,
 					avgPercMapQBelowThresh)
 			
-			if avgDepth < MIN_DEPTH:
+			if avgDepth <= MIN_DEPTH:
 				combined_low_depth.write(out_line)
-			elif avgPercMapQBelowThresh > MIN_MAPQ_MASS:
+			elif avgPercMapQBelowThresh >= MIN_MAPQ_MASS:
 				combined_low_mapq.write(out_line)
 
 	except ValueError as e:

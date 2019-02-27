@@ -18,6 +18,6 @@ DRF_OUTPUT="${DRF_OUTDIR}/*.dark.low_mapq.bed"
 LOW_DEPTH_OUT="${RESULT_DIR}/${RESULT_PREFIX}.dark.low_depth.bed"
 LOW_MAPQ_OUT="${RESULT_DIR}/${RESULT_PREFIX}.dark.low_mapq.bed"
 
-awk '$5 < 5' $DRF_OUTPUT > $LOW_DEPTH_OUT &
-awk '$5 >= 5 && $6 > 90' $DRF_OUTPUT > $LOW_MAPQ_OUT
+awk '$5 <= 5' $DRF_OUTPUT > $LOW_DEPTH_OUT &
+awk '$5 > 5 && $6 >= 90' $DRF_OUTPUT > $LOW_MAPQ_OUT
 wait
