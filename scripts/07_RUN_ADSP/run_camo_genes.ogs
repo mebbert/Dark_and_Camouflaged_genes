@@ -59,7 +59,7 @@ gatk_bed=$3
 threads=1
 
 GATK_path=$4
-GATK="java -Xmx24g -jar $GATK_path"
+GATK="java -Xmx16g -jar $GATK_path"
 
 #Path prefix to camo-masked references
 # Should look like: path/to/refs/b37-camo_mask
@@ -82,7 +82,7 @@ max_repeat=5
 for repeat_num in $(seq 2 1 $max_repeat)
 do
 	ploidy=$(( $repeat_num * 2 ))
-	mkdir -p $DATA_DEST_DIR/gvcfs/ploidy_${ploidy}/
+	mkdir -p $DATA_DEST_DIR/camo_gvcfs/ploidy_${ploidy}/
 	ploidy_list="$TEMPORARY_DIR/gvcfs_ploidy${ploidy}.list"
 	gvcf_list[$repeat_num]=$ploidy_list
 done
@@ -108,7 +108,7 @@ do
 		# if you use the -L <bed> option.
 		#
 		# The fist part is skipping comment lines. 'paste' is a unicx command that pastes file lines together.
-		regions=$(awk "\$5 == $repeat_num { print \"chr\"\$1\":\"\$2\"-\"\$3 }" $realign_bed | paste -sd " ")
+		regions=$(awk "\$5 == $repeat_num { print \$1\":\"\$2\"-\"\$3 }" $realign_bed | paste -sd " ")
 		if [[ -z $regions ]]; then continue; fi #if regions is empty skip 
 
 		# Extract reads from regions and sort by read name.
@@ -116,16 +116,19 @@ do
 		#samtools view -hb $bam $regions | samtools sort -@ $threads -n -m 10G -o $tmp_bam
 
 		#Extract only reads with MapQ < 10
+		echo $regions
 		echo "samtools view -h $bam regions | awk '\$5 < 10' | samtools view -hb > $tmp_bam"
 		time samtools view -h $bam $regions | \
-			awk '$5 < 10' | \
-			samtools view -hb > $tmp_bam
+			awk '$5 < 10 || $1 ~ "^@"' | \
+			samtools view -hb - | \
+			samtools sort -n -m 16G -o $tmp_bam -
 
 		# Convert to fastq
-		fq=$TEMPORARY_DIR/${sampleName}_R1.fastq
+		fq1=$TEMPORARY_DIR/${sampleName}_R1.fastq
+		fq2=$TEMPORARY_DIR/${sampleName}_R2.fastq
 
-		echo "bedtools bamtofastq -i $tmp_bam -fq $fq"
-		time bedtools bamtofastq -i $tmp_bam -fq $fq
+		echo "bedtools bamtofastq -i $tmp_bam -fq $fq1 -fq2 $fq2"
+		time bedtools bamtofastq -i $tmp_bam -fq $fq1 -fq2 $fq2
 
 		# Remove tmp_bam
 		rm $tmp_bam*
@@ -134,20 +137,21 @@ do
 		aligned_sam=$TEMPORARY_DIR/${sampleName}.sam
 		final_bam=$TEMPORARY_DIR/${sampleName}.ploidy_${ploidy}.bam
 		RG="@RG\tID:group1\tSM:$sampleName\tPL:illumina\tLB:lib1\tPU:unit1"
-		echo "bwa mem -M -R $RG -t $threads $ref $fq > ${aligned_sam}"
+		echo "bwa mem -M -R $RG -t $threads $ref $fq1 $fq2 > ${aligned_sam}"
 		time bwa mem -M  \
 			-R $RG \
 			-t $threads \
 			$ref \
-			$fq > $aligned_sam
+			$fq1 $fq2 > $aligned_sam
 
 		# Convert to sorted bam
-		echo "samtools view -bt $ref $aligned_sam | samtools sort -@ $threads -m 4G -o $final_bam -"
-		time samtools view -bt $ref $aligned_sam | samtools sort -@ $threads -m 4G -o $final_bam -
+		echo "samtools view -bt $ref $aligned_sam | samtools sort -@ $threads -m 6G -o $final_bam -"
+		time samtools view -bt $ref $aligned_sam | samtools sort -@ $threads -m 6G -o $final_bam -
 
 		# Remove sam and fastqs
 		rm $aligned_sam
-		rm $fq
+		rm $fq1
+		rm $fq2
 
 		# index bam
 		echo "samtools index $final_bam"
@@ -178,7 +182,7 @@ for repeat_num in $(seq 2 1 $max_repeat)
 do
 	ploidy=$(( $repeat_num * 2 ))
 	ref="${ref_prefix}.ploidy_${ploidy}.fa"
-	comb_gvcf_file=$DATA_DEST_DIR/gvcfs/ploidy_${ploidy}/$JOB_ID.g.vcf
+	comb_gvcf_file=$DATA_DEST_DIR/camo_gvcfs/ploidy_${ploidy}/$JOB_ID.g.vcf
 	echo "$GATK -T CombineGVCFs -R $ref -o $comb_gvcf_file  --variant ${gvcf_list[$repeat_num]}"
 	$GATK \
 		-T CombineGVCFs \
