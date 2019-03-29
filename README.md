@@ -4,7 +4,7 @@ Here, we present a list of dark and camouflaged genes and .bed files specifying 
 We provide scripts on how these regions were defined and a pipeline on how to rescue variants from
 these regions in short read data. 
 
-Check out our preprint, [here] (https://www.biorxiv.org/content/10.1101/514497v1)
+Check out our preprint, [here](https://www.biorxiv.org/content/10.1101/514497v1)
 
 ## What are dark genes?
 
@@ -15,7 +15,7 @@ and 'dark by MAPQ' (where reads align but ≥ 90% of reads have MAPQ < 10). A sp
 by MAPQ genes are camouflaged genes, dark genes that are the result of repetitive elements or duplication 
 events in the genome.
 
-![Example of dark and camouflaged regions] (./imgs/dark_camo_example.png)
+![Example of dark and camouflaged regions](./imgs/dark_camo_example.png)
 
 
 ## Using our camouflaged .bed files
