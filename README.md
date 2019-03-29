@@ -1,15 +1,22 @@
 # Systematic analysis of dark and camouflaged genes
-We anticipate having all code and .bed files posted here by the end of January 2019.
 
-**IN PROGRESS**
-### Update 1 February 2019
-Filled in description of how to use our camouflaged bed files. Still working on writing rest of
-README
-### Update 29 January 2019
-We just uploaded scripts and .bed files. We are working on a write up for how to run the
-camouflaged gene analysis.
+Here, we present a list of dark and camouflaged genes and .bed files specifying their genomic coordinates. 
+We provide scripts on how these regions were defined and a pipeline on how to rescue variants from
+these regions in short read data. 
+
+Check out our preprint, [here] (https://www.biorxiv.org/content/10.1101/514497v1)
 
 ## What are dark genes?
+
+Dark regions of the genome are those that cannot be adequately assembled or aligned using standard
+short-read sequncing technologies, preventing researchers from calling mutations in this regions.
+We define two main subclasses of dark regions: 'dark by depth' (where ≤ 5 reads map to the region)
+and 'dark by MAPQ' (where reads align but ≥ 90% of reads have MAPQ < 10). A specific subset of dark
+by MAPQ genes are camouflaged genes, dark genes that are the result of repetitive elements or duplication 
+events in the genome.
+
+![Example of dark and camouflaged regions] (./imgs/dark_camo_example.png)
+
 
 ## Using our camouflaged .bed files
 
@@ -55,22 +62,15 @@ For each repeat number to be tested, do the following:
 3. Align these reads to the new camo masked reference with bwa mem
 
 4. Use GATK HaplotypeCaller to call variants specifying the correct ploidy and setting the interval
-   to the alignto .bed
+   to the GATK .bed
 
 5. Combine and Genotype gVCF files across the whole cohort to create the ploidy specific VCF
 
-6. Filter out false positive variants with QD and InbreedingCoeff cutoffs 
+6. Filter out false positive variants with QD and InbreedingCoeff cutoffs and remove variants found
+   in reference-based artifact positions
 
 7. Convert polyploid VCFs to diploid and use plink2 to test associations
 
 Any variants found using these methods should be investigated independentally and then experimentally 
 validated to ensure they are not false positives and then to determine in which specific camouflaged region 
 the variant actually lies. 
-
-## Rerunning our analysis
-
-In order to replicate our results or to apply these same methods to other datasets, we provide all
-of our scripts organized into 11 distinct steps. Each step is encompassed into a directory with all
-necesary scripts to run that step. Each directory contains a submit.sh shell script to automate the
-running of each step. At the top each submit.sh script is a list of entry points where the
-user should fill in the correct paths for their data before running the script.  
