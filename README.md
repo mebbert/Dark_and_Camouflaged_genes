@@ -120,8 +120,7 @@ one gene-body element per camoulog group. For example, CR1 exons 10, 21, and 26 
 and are all camouflaged to eachother. The realign .bed will contain the coordinates for all three
 exons, while the alignto .bed will only contain coordinates for exon 10. Thus, the alignto file
 defines which repeated region will be used to align the extracted reads, and which repeated regions
-will be masked. The complement of the alignto .bed is used to mask the genome, and then the alignto
-.bed itself is used as the interval .bed in GATK to call variants. When masking the genome, each
+will be masked. The complement of the alignto .bed is used to mask the genome. When masking the genome, each
 region in the alignto .bed is expanded by 50bp so that reads extracted near the boundary of a camo
 region can accurately align. 
 
@@ -132,11 +131,17 @@ also call variants using GATK with different ploidies. Variants within a region 
 group repeat number of 2, are called with a ploidy of 4. Whereas in the CR1 example, we would use a
 HaplotypeCaller ploidy of 6.
 
+The GATK.bed provided is essentially the same as the align\_to.bed with the exception that it is 
+restricted to CDS regions and only lists the interval of that actual camo region and not the whole 
+gene body. The GATK.bed is passed into GATK to define the interval over which to call variants. We
+only called variants strictly in camo regions and only in CDS regions to avoid calling too many 
+false positives.
+
 In order to use these .bed files to call camouflaged variants in your own data set, follow the scripts found
 in the steps **06\_CREATE\_BED\_FILE** to **10\_VARIANT\_FILTERING** directories. A brief outline of the workflow is as
 follows:
 
-For each repeat number to be tested, do the following:
+For each repeat number to be tested (we recommend ≤ 5), do the following:
 
 1. Expand the alignto .bed file by 50 and use it to mask the genome for this ploidy
 
