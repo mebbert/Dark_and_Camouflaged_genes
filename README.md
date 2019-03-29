@@ -6,6 +6,8 @@ these regions in short read data.
 
 Check out our preprint, [here](https://www.biorxiv.org/content/10.1101/514497v1)
 
+---
+
 ## What are dark genes?
 
 Dark regions of the genome are those that cannot be adequately assembled or aligned using standard
@@ -17,8 +19,90 @@ events in the genome.
 
 ![Example of dark and camouflaged regions](./imgs/dark_camo_example.png)
 
+The IGV pile-ups above show examples of these dark regions. *a)* HLA-DRB5 is dark by depth, because
+no reads align to this region. *b)* HSPA1A is dark by MAPQ because reads align, but all the reads
+that do have poor MAPQ and would be filtered out by variant callers. *c)* The reason HSPA1A is dark
+by MAPQ is because of a gene duplication event: it is camouflaged by HSPA1B. The two genes are nearly
+identical so aligners can't determine from which gene a read originated.
+
+We discovered dark regions are increasingly prevelant across the human genome. Based on standard
+whole-genome Illumina sequencing data, we identified 36794 dark regions in 6054 gene bodies (3804
+protein-coding) from pathways important to human health, development, and reproduction. Of the 6054
+gene bodies, 527 (8.7%) were 100% dark (117 protein-coding) and 2128 (35.2%) were ≥5% dark (592
+protein-coding). We found2855 dark regions were in protein-coding exons (CDS) across 748 genes.
+Many of these genes are important to human health and disease. 
+
+We have also developed an algorithm to resolve most of these camouflaged regions in short-read data. Here
+we apply it to the Alzhiemer's Disease Sequencing Project (ADSP) whole exome case control study.
+Here we provide the scripts we used to characterize these regions and apply our algorithm to ADSP.
+
+As a proof of concept, we used these methods to find a variant in ADSP present in 5 Alzhiemers Disease cases, but 0
+controls in the CR1 gene ( a top AD gene that is 26% dark CDS )
+
+---
+
+## Running our analysis
+
+We have divided up our scripts into 11 distinct steps found in the scripts directory. These steps
+can broadly be placed into 3 categories. Step 00-05 are used to caracterize dark regions and create
+the .bed files used in our analysis pipeline. Step 06-10 show the steps we took to call camo
+variants in ADSP. Finally, step 11 contains all the scripts used to plot figures for our manuscript. 
+
+Each step should be self contained, but may depend on the output of previous steps. With in each
+step directory there is a submit.sh script, that will automate the running of all the scripts for
+that step. At the top of the submit script is an in-depth description of what each step is doing, as 
+well as a list of entry points required for that step. **Before running a submit.sh script be sure
+to update the Path variables entry points at the beginning of the submit script**.
+
+A brief outline of each step is summarized below:
+
+* **00\_GET\_BAMS** Scripts used to align Fastq reads from 10X and ONT and to realign all bams to the
+  three different genome builds (b37, hg38, hg38+alt)
+
+* **01\_RUN\_DRF** Scripts used to run the [DarkRegionFinder](https://github.com/mebbert/DarkRegionFinder) 
+  on the bams. In brief, walks through the genome and for every base prints the read depth and mass of reads with low MAPQ
+
+* **02\_COMBINE\_DRF\_OUTPUT** Scripts used to average together the DRF output from the 10 illumina
+  samples and split the combined output into a dark\_by\_depth bed file and a dark\_by\_mapq file
+
+* **03\_CALC\_BAM\_METRICS** Scripts used to calculate the median coverage and read lengths for all
+  the sequencing technologies 
+
+* **04\_PREPARE\_ANNOTATION\_BED** Bedtool arithmetic scripts to convert Ensembl GFF3 annotation file from transcript level to a
+  gene level annotation (condensing multiple transcripts), and removing overlapping regions or genes within the bed file.
+
+* **05\_CREATE\_BED\_FILE** Uses the split DRF output from step 2 and intersects it with the
+  annotation bed from step 4 to quanitfy just how dark gene bodies are. Produces the supplemental
+  tables shown in our manuscript. Also blats the low\_mapq dark regions and maps them to eachother
+  to define camouflaged beds that will be used in our camo variant rescue pipeline.
+
+* **06\_MASK\_GENOME** Uses the camo align\_to file from step 5 to create a camo masked genome
+
+* **07\_RUN\_ADSP** Scripts to realign camo reads from the ADSP exome bams and realign them to the
+  camo-masked genome from step 6, and then call variants in these regions
+
+* **08\_COMBINE\_AND\_GENOTYPE\_ADSP** Takes the intermediate gVCFs from step 7 and combines and
+  genotypes them
+ 
+* **09\_FIND\_FALSE\_POSITIVES** Creates a bed file listing positions in the camo-masked genome where reference-based
+  artifacts might be called.
+
+* **10\_VARIANT\_FILTERING** Combines the VCFs from step 8 and annotates the VCF with inbreeding
+  coefficient. Filters out variants present in the reference-based artifact bed created in step 9
+  and that have low QD values
+
+* **11\_FIGURES** Rmarkdown scripts we used to plot all the figures for our manuscript 
+
+---
 
 ## Using our camouflaged .bed files
+
+We encourage researchers to use our methods and the provided .bed files to call camo variants within
+their own data sets.
+
+We outline of our short read pipeline to rescue camo variants below:
+
+![Rescue Camo Variants Image](./imgs/rescue_pipeline.png)
 
 We provide two .bed files to define and call variants in camouflaged genes. The .bed files were
 created from 10 whole genomes generated with Illumina paired-end read Sequencing with a 100bp read
@@ -50,7 +134,7 @@ group repeat number of 2, are called with a ploidy of 4. Whereas in the CR1 exam
 HaplotypeCaller ploidy of 6.
 
 In order to use these .bed files to call camouflaged variants in your own data set, follow the scripts found
-in the **06\_CREATE\_BED\_FILE** and **07\_RUN\_ADSP** directories. A brief outline of the workflow is as
+in the steps **06\_CREATE\_BED\_FILE** to **10\_VARIANT\_FILTERING** directories. A brief outline of the workflow is as
 follows:
 
 For each repeat number to be tested, do the following:
