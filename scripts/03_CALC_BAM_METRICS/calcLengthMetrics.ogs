@@ -2,10 +2,8 @@
 #$ -cwd  ## start job in current working directory (where it's submitted from)
 #$ -N CalcLengthMetrics  ## job name
 #$ -q <queue>  ## queue
-#$ -M email@institution.edu  ## email
-#$ -m abe  ## notification points
-#$ -pe threaded 1
-#$ -l h_vmem=450G  ## Memory request
+#$ -pe threaded 2
+#$ -l h_vmem=2G  ## Memory request
 #$ -notify  ## tells OGS to allow a 'trap'
 #$ -j y
 source $HOME/.bash_profile
@@ -14,8 +12,12 @@ PB_BAM=$1
 ONT_BAM=$2
 RESULT_DIR=$3
 
+mkdir -p $RESULT_DIR
+
 samtools view $PB_BAM | awk '{print length($10)}' > pb.length.txt &
-samtools view $ONT_BAM | awk '{print length($10)}' > ont.length.txt 
+samtools view $ONT_BAM | awk '{print length($10)}' > ont.length.txt
 wait
 
 Rscript calcLengthMetrics.R > ${RESULT_DIR}/length.metrics.txt
+rm pb.length.txt
+rm ont.length.txt

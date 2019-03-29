@@ -16,13 +16,13 @@ do
 	gvcf_list="${ploidy}.gvcfs.list"
 	find $dir -name "*.g.vcf" > $gvcf_list 
 
-	REF="${CAMO_MASK_REF_PREFIX}$(($repeat * 2)).fa"
+	REF="${CAMO_MASK_REF_PREFIX}.${ploidy}.fa"
 	echo $repeat
 	awk "\$5 == $repeat {print \$1\":\"\$2\"-\"\$3}" $GATK_bed | \
 		while read region 
 		do 
 			echo $region 
-			qsub combine_and_genotype.ogs 
+			qsub combine_and_genotype.ogs \
 					$gvcf_list \
 					$region \
 					$result_dir \

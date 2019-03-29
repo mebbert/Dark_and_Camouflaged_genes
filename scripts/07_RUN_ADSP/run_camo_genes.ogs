@@ -2,7 +2,6 @@
 #$ -cwd  ## start job in current working directory (where it's submitted from)
 #$ -N Camo_run ## job name
 #$ -q <queue>  ## queue
-#$ -M email@institution.edu  ## email
 #$ -pe threaded 1
 #$ -l h_vmem=32G  ## Memory request
 #$ -j y
@@ -47,9 +46,11 @@ mkdir -p $TEMPORARY_DIR
 # a range of samples from the complete bam_list.txt to run (inclusive). Should
 # be comma-delmited to work with sed
 sample_range=$1		
+echo $sample_range
 
 # The bed file to use for extracting reads from each sample
 realign_bed=$2		
+echo $realign_bed
 
 # The bed file to use for calling variants. This will make GATK much faster.
 # Using a different bed file here because the regions are expanded a bit
@@ -67,7 +68,6 @@ ref_prefix=$5
 filtered_bam_list=$6
 DATA_DEST_DIR=$7
 
-
 bam_list=${TEMPORARY_DIR}/bam_list.txt
 
 # Writing bam_list
@@ -82,7 +82,7 @@ max_repeat=5
 for repeat_num in $(seq 2 1 $max_repeat)
 do
 	ploidy=$(( $repeat_num * 2 ))
-	mkdir -p $DATA_DEST_DIR/camo_gvcfs/ploidy_${ploidy}/
+	mkdir -p ${DATA_DEST_DIR}/camo_gvcfs/ploidy_${ploidy}/
 	ploidy_list="$TEMPORARY_DIR/gvcfs_ploidy${ploidy}.list"
 	gvcf_list[$repeat_num]=$ploidy_list
 done
@@ -116,7 +116,6 @@ do
 		#samtools view -hb $bam $regions | samtools sort -@ $threads -n -m 10G -o $tmp_bam
 
 		#Extract only reads with MapQ < 10
-		echo $regions
 		echo "samtools view -h $bam regions | awk '\$5 < 10' | samtools view -hb > $tmp_bam"
 		time samtools view -h $bam $regions | \
 			awk '$5 < 10 || $1 ~ "^@"' | \
@@ -128,10 +127,10 @@ do
 		fq2=$TEMPORARY_DIR/${sampleName}_R2.fastq
 
 		echo "bedtools bamtofastq -i $tmp_bam -fq $fq1 -fq2 $fq2"
-		time bedtools bamtofastq -i $tmp_bam -fq $fq1 -fq2 $fq2
+		time bedtools bamtofastq -i $tmp_bam -fq $fq1 -fq2 $fq2 2> /dev/null
 
 		# Remove tmp_bam
-		rm $tmp_bam*
+		rm ${tmp_bam}*
 
 		# Align with BWA
 		aligned_sam=$TEMPORARY_DIR/${sampleName}.sam
@@ -175,6 +174,8 @@ do
 			--emitRefConfidence GVCF \
 			--dontUseSoftClippedBases \
 			-o $gvcf
+
+		rm ${final_bam}*
 	done
 done < $bam_list
 

@@ -7,12 +7,14 @@ function maskGenome {
 	RESULT_DIR=$4
 	PREFIX=$5
 
+	genome=${REF}.fai
 	ploidy=$((2*i))
 	out="${RESULT_DIR}/${PREFIX}.ploidy_${ploidy}.fa"
+	echo " awk "\$NF == $i" $expanded | bedtools complement -i - -g $genome | bedtools maskfasta -fi $REF -bed - -fo $out"
 	awk "\$NF == $i" $expanded | \
-	bedtools complement \
-		-i - \
-		-g $genome | \
+		bedtools complement \
+			-i - \
+			-g $genome | \
 		bedtools maskfasta \
 			-fi $REF \
 			-bed - \
@@ -23,7 +25,7 @@ function maskGenome {
 	bwa index -a bwtsw $out
 	echo " samtools faidx b37-camo_mask.fa"
 	samtools faidx $out
-	echo "picard CreateSequenceDictionary REFERENCE=b37-camo_mask.fa  OUTPUT=b37-camo_mask.dict"
+	echo "picard CreateSequenceDictionary REFERENCE=hg38-camo_mask.fa  OUTPUT=hg38-camo_mask.dict"
 	picard CreateSequenceDictionary \
 		REFERENCE=$out
 		OUTPUT=${out%.*}.dict

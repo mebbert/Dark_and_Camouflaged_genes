@@ -17,7 +17,6 @@ print(summary(pacbio))
 cat(paste0(" N50\t: ",N50(pacbio[[1]]), "\n\n"))
 
 ont <- read.table("ont.length.txt")
-print("ONT metrics (cliveome2 + HG005):")
+print("ONT metrics:")
 print(summary(ont))
 cat(paste0(" N50\t: ",N50(ont[[1]]), "\n"))
-

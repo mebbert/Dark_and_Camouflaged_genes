@@ -1,0 +1,78 @@
+#!/bin/bash
+#$ -cwd  
+#$ -N 'Make_camo_bed'
+#$ -q <queue>
+#$ -pe threaded 16
+#$ -l h_vmem=8G  
+#$ -notify  
+#$ -j y ##merge stderr and stdout
+
+TMP_DIR="./tmp/${JOB_ID}"
+mkdir -p $TMP_DIR
+
+CAMO_ANNOTATION=$1
+ALIGN_TO=$2
+REF=$3
+RESULT=$4
+
+NUM_THREADS=8
+query="${TMP_DIR}/query/mapq_genes.query.fa"
+blat_result="${TMP_DIR}/blat_result/blat.results.psl"
+blat_log="${TMP_DIR}/blat_log/tmp.blat.log"
+blat_bed=${blat_result//psl/bed}
+false_positives="${TMP_DIR}/false_positives.txt"
+
+mkdir -p "${TMP_DIR}/query"
+grep -vE "^#" $CAMO_ANNOTATION | \
+	awk '$5 == "CDS"' | \
+	bedtools intersect \
+		-a - \
+		-b $ALIGN_TO \
+		-wb | \
+		awk '$NF <= 5' | \
+		bedtools getfasta \
+			-fi $REF \
+			-bed - \
+			-name+ \
+			-fo $query
+
+nLines=$(wc -l $query | awk '{print $1}')
+stepSize=$(($nLines / $NUM_THREADS))
+if [[ $(($stepSize % 2 )) == 1 ]]
+then
+	    stepSize=$(($stepSize + 1))
+fi
+
+rm -rf "${TMP_DIR}/blat_result"
+mkdir -p "${TMP_DIR}/blat_result"
+mkdir -p "${TMP_DIR}/blat_log"
+for i in $(seq 1 $stepSize $nLines)
+do
+	sed "$((i)),$((i + $stepSize - 1))!d" $query > ${query}.${i}
+	echo "`date` blat $REF ${query}.${i} -t=dna -q=dna blat.results.psl"
+	blat $REF ${query}.${i} \
+			-t=dna \
+			-q=dna \
+			-minIdentity=95 \
+			-noHead \
+			${blat_result}.${i} \
+			&> ${blat_log}.${i} &
+done
+wait
+
+echo "`date` blatting complete: combining blat output"
+cat ${blat_result}.* > $blat_result
+
+echo "`date` awk -f score_blat_output.awk $blat_result > $blat_bed"
+awk -f score_blat_output.awk \
+	$blat_result \
+	> $blat_bed
+
+python extract_false_positives.py \
+	$blat_bed \
+	$REF | \
+	bedtools sort -i - -g ${REF}.fai \
+	> $false_positives
+
+cp $false_positives $RESULT
+rm -rf $TMP_DIR

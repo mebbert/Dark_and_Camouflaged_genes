@@ -1,0 +1,91 @@
+---
+title: "ADSP Camo Gene Variant Filtering"
+author: "Tanner Jensen"
+date: "12/4/2018"
+output: html_document
+---
+
+```{r}
+titv <- function(variants) {
+  variants %<>% filter(pass)
+  return(sum(variants$subtype == "Ti") / sum(variants$subtype == "Tv"))
+}
+```
+
+```{r}
+CDS.variants <- read_tsv("filtered.variant_metrics.txt")
+CDS.variants %<>% filter(!is.na(QD))
+summary(CDS.variants)
+```
+
+```{r}
+table(CDS.variants$PASS)
+CDS.variants$pass <- ifelse(CDS.variants$PASS %in% c("PASS", "inbreeding_filter", "qd_filter"), yes = T, no = F) 
+
+ggplot(CDS.variants, aes(InbreedingCoeff, group=pass, fill=pass, alpha=.2)) + geom_density() 
+titv(CDS.variants)
+```
+
+```{r}
+CDS.variants$pass <- ifelse(CDS.variants$QD < 2.5, yes = F, no = CDS.variants$pass)
+ggplot(CDS.variants, aes(QD, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(CDS.variants, aes(FS, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(CDS.variants, aes(MQ, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(CDS.variants, aes(MQRankSum, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(CDS.variants, aes(ReadPosRankSum, group=pass, fill=pass, alpha=.2)) + geom_density() 
+ggplot(CDS.variants, aes(InbreedingCoeff, group=pass, fill=pass, alpha=.2)) + geom_density()
+titv(CDS.variants)
+table(CDS.variants$pass)
+```
+
+```{r}
+CDS.variants$pass <- ifelse(CDS.variants$InbreedingCoeff > .2, yes = F, no = CDS.variants$pass)
+titv(CDS.variants)
+table(CDS.variants$pass)
+```
+
+```{r}
+CDS.variants$pass <- ifelse(CDS.variants$PASS %in% c("PASS", "inbreeding_filter", "qd_filter"), yes = T, no = F)
+qd.results <- NULL
+for ( QD_cutoff in seq(from = 0, to = 10, by = .25)) {
+  tmp <- filter(CDS.variants, QD > QD_cutoff)
+  num_variants <- sum(tmp$pass)
+  variant_titv <- titv(tmp)
+  qd.results <- rbind(qd.results, c(QD_cutoff, num_variants, variant_titv))
+}
+qd.results <- as.data.frame(qd.results)
+colnames(qd.results) <- c("QD_cutoff", "num_Variants", "TiTv")
+print(qd.results)
+```
+```{r}
+a <- ggplot(qd.results, aes(QD_cutoff, TiTv)) + 
+  geom_line() +
+  geom_vline(xintercept = 2, color = "red", linetype = "dashed") +
+  geom_vline(xintercept = 3, color = "red", linetype = "dashed")
+b <- ggplot(qd.results, aes(QD_cutoff, num_Variants)) + 
+  geom_line() +
+  geom_vline(xintercept = 2, color = "red", linetype = "dashed") +
+  geom_vline(xintercept = 3, color = "red", linetype = "dashed")
+plot_grid(a, b, labels = c("a.", "b."))
+```
+
+```{r}
+CDS.variants$pass <- ifelse(CDS.variants$PASS %in% c("PASS", "inbreeding_filter", "qd_filter"), yes = T, no = F)
+CDS.variants$pass <- ifelse(CDS.variants$QD < 2, yes = F, no = CDS.variants$pass)
+ic.results <- NULL
+for ( IC_cutoff in seq(from = 0.1, to = 1, by = .1)) {
+  tmp <- filter(CDS.variants, InbreedingCoeff < IC_cutoff)
+  num_variants <- sum(tmp$pass)
+  variant_titv <- titv(tmp)
+  ic.results <- rbind(ic.results, c(IC_cutoff, num_variants, variant_titv))
+}
+ic.results <- as.data.frame(ic.results)
+colnames(ic.results) <- c("IC_cutoff", "num_Variants", "TiTv")
+print(ic.results)
+```
+```{r}
+t <- ggplot(ic.results, aes(IC_cutoff, TiTv)) + geom_line()
+n <- ggplot(ic.results, aes(IC_cutoff, num_Variants)) + geom_line()
+plot_grid(t, n, labels = c("QD > 2", ""))
+```
+

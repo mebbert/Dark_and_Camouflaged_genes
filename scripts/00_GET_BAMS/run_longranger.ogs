@@ -15,12 +15,16 @@ source $HOME/.bash_profile
 # Run WGS #
 ###########
 
+fastq_dirs=$1
+ref=$2
+out=$3
+
 longranger wgs \
-	--id HG00512 \
+	--id $out \
 	--description="Han Chinese" \
 	--sex="male" \
-	--fastqs=chi/HNKHFCCXX/,chi/HWHFTCCXX/ \
-	--reference="references/10x-b37-2.1.0" \
+	--fastqs=${fastq_dirs} \
+	--reference=${ref} \
 	--vcmode=freebayes \
 	--downsample=385 
 	--jobmode=sge \

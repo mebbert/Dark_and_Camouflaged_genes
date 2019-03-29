@@ -2,9 +2,9 @@
 #$ -cwd  
 #$ -N 'Run_DRF'
 #$ -q <queue>
-#$ -M email@institution.edu
+#$ -M email@institute.edu
 #$ -pe threaded 1
-#$ -l h_vmem=30G  
+#$ -l h_vmem=40G
 #$ -notify  
 #$ -j y ##merge stderr and stdout
 
@@ -34,7 +34,7 @@ low_cov_bed="/dev/null" # Nothing output to low_cov_bed since min_depth = -1
 low_mapq_bed="${RESULT_DIR}/${name}.min_depth_${min_depth}.min_mapq_mass_${min_mapq_mass}.mapq_thresh_${mapq_thresh}.dark.low_mapq.bed"
 inc_bed="/dev/null" # No need to store incomplete bases for each sample
 
-java -Xmx20G -jar $DRF_jar
+java -Xmx32G -jar $DRF_jar \
 		-i $bam \
 		--human-ref $ref \
 		--min-region-size 1 \
@@ -44,4 +44,4 @@ java -Xmx20G -jar $DRF_jar
 		--region-exclusivity \
 		--low-coverage-bed-output $low_cov_bed \
 		--low-mapq-bed-output $low_mapq_bed \
-		--incomplete-bed-output $inc_bed
+		--incomplete-bed-output $inc_bed 

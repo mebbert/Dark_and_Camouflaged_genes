@@ -51,6 +51,7 @@ def loadLowMapQRegions(low_mapq_annos):
 	low_mapq_regions = {}
 	low_mapq_annos = open(low_mapq_annos, 'r')
 	for line in low_mapq_annos:
+		if line.startswith("#") or line.startswith("chrom"): continue
 		toks = line.strip().split('\t')
 		region_id = toks[3]
 		chrom = toks[6]

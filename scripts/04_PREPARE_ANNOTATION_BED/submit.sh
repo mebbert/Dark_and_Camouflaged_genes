@@ -1,10 +1,20 @@
 #!/bin/bash
 
-## Update Ensembl's GFF3 Gene Annotations
-## to remove overlapping gene body elements 
-## (I.E. collapse down multiple transcripts per gene down to one,
-## remove exon labels from CDS/UTR labels, add Introns, and remove 
-## antisense or overlapping genes)
+## 04_PREPARE_ANNOTATION_BED
+## Step 4 of our analysis converts Ensembl GFF3 Gene Annotations
+## from a transcript level to a gene level, using genome arithmetic
+## We only consider normal transcripts, ignoring all nonsense-mediated decay
+## or retained intron transcripts when calculating gene-level annotations
+
+## We also format annotation beds, removing overlapping gene body elements,
+## remove exon labels from CDS/UTR labels, add Intron annotations, and remove 
+## antisense or overlapping genes (i.e. miRNA genes present within the
+## intron of a larger gene)
+
+## We run these scripts for both b37 and hg38. For the hg38 annotations we
+## must then add "chr" to the front of each chrom so it is consistent with
+## hg38 contig naming.
+
 
 ###################################
 ## TODO: Fill in Correct Paths   ##

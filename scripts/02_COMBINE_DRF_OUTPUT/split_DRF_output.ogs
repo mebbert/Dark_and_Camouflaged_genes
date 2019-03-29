@@ -1,23 +1,22 @@
 #!/bin/bash
 #$ -cwd  
-#$ -N 'Combine_DRF'
+#$ -N 'Split_DRF'
 #$ -q <queue>
-#$ -M email@institution.edu  
-#$ -pe threaded 1
+#$ -M email@email.edu  
+#$ -pe threaded 2
 #$ -l h_vmem=2G  
 #$ -notify  
 #$ -j y ##merge stderr and stdout
 
-DRF_OUTDIR=$1
+DRF_OUT=$1
 RESULT_DIR=$2
 RESULT_PREFIX=$3
 
 mkdir -p $RESULT_DIR
 
-DRF_OUTPUT="${DRF_OUTDIR}/*.dark.low_mapq.bed"
 LOW_DEPTH_OUT="${RESULT_DIR}/${RESULT_PREFIX}.dark.low_depth.bed"
 LOW_MAPQ_OUT="${RESULT_DIR}/${RESULT_PREFIX}.dark.low_mapq.bed"
 
-awk '$5 <= 5' $DRF_OUTPUT > $LOW_DEPTH_OUT &
-awk '$5 > 5 && $6 >= 90' $DRF_OUTPUT > $LOW_MAPQ_OUT
+awk '$5 <= 5' $DRF_OUT > $LOW_DEPTH_OUT &
+awk '$5 > 5 && $6 >= 90' $DRF_OUT > $LOW_MAPQ_OUT
 wait

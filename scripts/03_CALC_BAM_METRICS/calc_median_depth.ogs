@@ -1,11 +1,9 @@
 #!/bin/bash
 #$ -cwd  
 #$ -N Calc_Median_Coverage  
-#$ -q <queue>
-#$ -M email@institution.edu  
-#$ -m abe  
+#$ -q <large-memory queue>
 #$ -pe threaded 1
-#$ -l h_vmem=450G  
+#$ -l h_vmem=800G
 #$ -notify  
 #$ -j y
 source $HOME/.bash_profile
@@ -14,12 +12,18 @@ DRF_BED=$1
 LABEL=$2
 COMBINED_OUT=$3
 
+JOB_ID=12345
+TMP_DIR="/tmp/${JOB_ID}"
+
+mkdir -p $TMP_DIR
+
 BASE=$(basename $1)
-TMP="/tmp/$base_name"
-OUT="/tmp/${BASE%%.*}.median.depth"
+TMP="${TMP_DIR}/$BASE"
+OUT="${TMP_DIR}/${BASE%%.*}.median.depth"
 
 cat $DRF_BED | python remove_unassembled_contigs.py > $TMP
 python calc_median_depth.py $TMP > $OUT
 
-echo -e "${DRF_BED}\t${LABEL}\t$(cat $OUT)"
-rm -rf $tmp
+echo -e "${DRF_BED}\t${LABEL}\t$(cat $OUT)" >> $COMBINED_OUT
+
+rm -rvf $TMP_DIR

@@ -20,11 +20,17 @@ def main(DRF_bed_list_file, combined_low_depth, combined_low_mapq):
 		for line in DRF_bed_list:
 			bed_file_name = line.strip()
 			beds_to_combine.append(open(bed_file_name, 'r'))
-			beds_to_combine[-1].readline() # read DRF header
 
 		combined_low_depth = open(combined_low_depth, 'w')
 		combined_low_mapq = open(combined_low_mapq, 'w')
 		for line in beds_to_combine[0]:
+			if line.startswith("chrom\tstart\tend"):
+				for bed in beds_to_combine[1:]:
+					line = bed.readline()
+					if not line.startswith("chrom\tstart\tend"):
+						raise ValueError("Input bed files do noy have headers in same order")
+				continue
+
 			toks = line.strip().split('\t')
 			chrom = toks[0]
 			start = int(toks[1])

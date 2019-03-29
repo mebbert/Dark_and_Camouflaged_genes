@@ -13,7 +13,7 @@ def extractAnnos(annos):
 
 	return anno_dict
 
-def main(percent_camo_file, biotype_camo_file, coding_camo_file):
+def main(percent_camo_file, biotype_camo_file, coding_camo_file, label):
 	lengths = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: (0,0))))
 	coding_lengths = defaultdict(lambda:defaultdict(lambda: (0,0)))
 	biotype_lengths = defaultdict(lambda:defaultdict(lambda: (0,0)))
@@ -21,6 +21,16 @@ def main(percent_camo_file, biotype_camo_file, coding_camo_file):
 	biotypes = {}
 	biotype_bins = ["total", "protein coding", "pseudogene", "rRNA", "snRNA",
 		"miRNA",  "lincRNA", "other"]
+	sys.stdout.write("# This table shows the intersection of %s regions by a gene annotation gff3, showing where %s regions fall within gene body elements\n" % (label, label))
+	sys.stdout.write("# chrom : Chromosome of %s region\n" % label)
+	sys.stdout.write("# region_start : start position of %s region within gene-body element\n" % label)
+	sys.stdout.write("# region_end : end position of %s region within gene-body element\n" % label)
+	sys.stdout.write("# gene_body_id : ID of gene body element that contains this %s region\n" % label)
+	sys.stdout.write("# region_type : genebody element type (e.g. exon, intron, UTR, etc.)\n")
+	sys.stdout.write("# biotype : GENCODE biotype of gene that contains this %s reigon\n" % label)
+	sys.stdout.write("# gene_body_chrom : Chromosome of the genebody element\n")
+	sys.stdout.write("# gene_body_start : start position of the genebody element\n")
+	sys.stdout.write("# gene_body_end : end position of the genebody element\n")
 	sys.stdout.write("#chrom\tstart\tend\tgene_body_id\tregion_type\tbiotype\tgene_body_chrom\tgene_body_start\tgene_body_end\n")
 	for line in sys.stdin:
 		toks = line.strip().split('\t')
@@ -77,7 +87,12 @@ def main(percent_camo_file, biotype_camo_file, coding_camo_file):
 				coding_lengths["exon"][region_id] = (coding_lengths["exon"][region_id][0] + overlap, region_length)
 
 	biotype_camo = open(biotype_camo_file, 'w')
-	biotype_camo.write("biotype\tnum_Region_Bases\ttotal_Biotype_Bases\tperc_region\n")
+	biotype_camo.write("# This table quanitifies the number of %s dark bases stratified by GENCODE biotype\n" % label)
+	biotype_camo.write("# biotype : GENCODE biotype\n")
+	biotype_camo.write("# num_dark_bases : number of %s bases in biotype\n" % label)
+	biotype_camo.write("# total_biotype_bases : total count of all bases in biotype\n")
+	biotype_camo.write("# perc_region : percentage of bases that are %s in this biotype (num_dark_bases / total_biotype_bases) \n" % label)
+	biotype_camo.write("biotype\tnum_dark_bases\ttotal_biotype_bases\tperc_dark\n")
 	for biotype in biotype_bins:
 		total_camo = 0
 		total_length = 0
@@ -89,6 +104,14 @@ def main(percent_camo_file, biotype_camo_file, coding_camo_file):
 		biotype_camo.write("%s\t%d\t%d\t%f\n" % (biotype, total_camo, total_length, float(total_camo)/total_length*100))
 
 	percent_camo = open(percent_camo_file, 'w')
+	percent_camo.write("# This table shows what percentage of genes are %s, stratefied by genebody element\n" % label)
+	percent_camo.write("# gene_name : Ensembl gene name\n")
+	percent_camo.write("# biotype : GENCODE biotype of gene\n")
+	percent_camo.write("# biotype : percent of CDS bases that are %s within gene (non protein-coding genes will have value of -1)\n" % label)
+	percent_camo.write("# perc_UTR : percent of UTR bases that are %s within gene (non protein-coding genes will have value of -1(\n" % label)
+	percent_camo.write("# perc_exon : percent of exonic bases that are %s\n" % label)
+	percent_camo.write("# perc_intron : percent of intronic bases that are %s\n" % label)
+	percent_camo.write("# perc_total : percent of total gene that is %s\n" % label)
 	percent_camo.write("gene_name\tbiotype\tperc_CDS\tperc_UTR\tperc_exon\tperc_intron\tperc_total\n")
 	for gene_id in gene_names:
 		results = defaultdict(lambda: -1)
@@ -107,6 +130,10 @@ def main(percent_camo_file, biotype_camo_file, coding_camo_file):
 		percent_camo.write("%s\t%s\t%f\t%f\t%f\t%f\t%f\n" % (name, biotype, results["CDS"], results["UTR"], results["exon"], results["intron"], results["gene"]))
 
 	coding_camo = open(coding_camo_file, 'w')
+	coding_camo.write("# This table quantifies where dark regions fall within protein-coding genes, stratifying the percentage of %s bases by gene-body element\n" % label)
+	coding_camo.write("# region_type : gene-body element ( e.g. Exon, Intron, CDS, UTR )\n")
+	coding_camo.write("# count : total number of %s bases within this gene-body element\n" % label)
+	coding_camo.write("# total : total count of bases in across all gene-body elements of this type\n")
 	coding_camo.write("region_type\tcount\ttotal\tperc_region\n")
 	for region_type in coding_lengths:
 		total_camo = 0
@@ -120,4 +147,4 @@ def main(percent_camo_file, biotype_camo_file, coding_camo_file):
 	coding_camo.close()
 
 if __name__ == "__main__":
-	main(sys.argv[1], sys.argv[2], sys.argv[3])
+	main(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
