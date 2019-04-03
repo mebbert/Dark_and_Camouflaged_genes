@@ -48,7 +48,7 @@ PB_RESULT_DIR="../results/hg38/PacBio"
 #########################################################
 
 ##Illumina RL100
-qsub camo_gene_pipeline.sh \
+qsub camo_gene_pipeline.ogs \
 	-d $ILL100_LOW_COV \
 	-m $ILL100_LOW_MAPQ \
 	-g $REF \
@@ -59,7 +59,7 @@ qsub camo_gene_pipeline.sh \
 	-r $ILL100_RESULT_DIR
 
 ##Illumina RL250
-qsub camo_gene_pipeline.sh \
+qsub camo_gene_pipeline.ogs \
 	-d $ILL250_LOW_COV \
 	-m $ILL250_LOW_MAPQ \
 	-g $REF \
@@ -70,7 +70,7 @@ qsub camo_gene_pipeline.sh \
 	-r $ILL250_RESULT_DIR
 
 ##PacBio
-qsub camo_gene_pipeline.sh \
+qsub camo_gene_pipeline.ogs \
 	-d $PB_LOW_COV \
 	-m $PB_LOW_MAPQ \
 	-g $REF \
@@ -81,7 +81,7 @@ qsub camo_gene_pipeline.sh \
 	-r $PB_RESULT_DIR
 
 ## ONT
-qsub camo_gene_pipeline.sh \
+qsub camo_gene_pipeline.ogs \
    -d $ONT_LOW_COV \
    -m $ONT_LOW_MAPQ \
    -g $REF \
@@ -92,7 +92,7 @@ qsub camo_gene_pipeline.sh \
    -r $ONT_RESULT_DIR
 
 ## 10X
-qsub camo_gene_pipeline.sh \
+qsub camo_gene_pipeline.ogs \
 	-d $TENX_LOW_COV \
 	-m $TENX_LOW_MAPQ \
 	-g $REF \
