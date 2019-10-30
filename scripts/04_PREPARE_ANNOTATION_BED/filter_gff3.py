@@ -83,7 +83,7 @@ def main(gff3_file):
 
 		elif keep_gene and ID.startswith("transcript:"):
 			keep_transcript = True
-			if biotype == "retained_intron" or (gene_biotype == "protein_coding" and biotype not in ["protein_coding", "nonsense_mediated_decay"]):
+			if biotype == "retained_intron" or (gene_biotype == "protein_coding" and biotype != "protein_coding"):
 				keep_transcript = False
 
 		if keep_gene and keep_transcript:
