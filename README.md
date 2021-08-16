@@ -4,7 +4,7 @@ We present a list of dark and camouflaged genes and .bed files specifying their 
 We provide scripts on how these regions were defined and a pipeline on how to rescue variants from
 these regions in short-read data. 
 
-Check out our preprint, [here](https://www.biorxiv.org/content/10.1101/514497v1).
+Check out our paper, [here](https://doi.org/10.1186/s13059-019-1707-2).
 
 ---
 
