@@ -38,16 +38,18 @@ ONT_PREFIX="ONT.hg38"
 ##################################
 
 #combine Illumina RL100 Samples
-bash combine_DRF.ogs $ILL100_DRF_OUTDIR $ILL100_RESULT_DIR $ILL100_PREFIX
+#bash combine_DRF.ogs $ILL100_DRF_OUTDIR $ILL100_RESULT_DIR $ILL100_PREFIX
+sbatch submitWithSingularity.slurm $ILL100_DRF_OUTDIR $ILL100_RESULT_DIR $ILL100_PREFIX
+
 
 #combine Illumina RL250 samples
-bash combine_DRF.ogs $ILL250_DRF_OUTDIR $ILL250_RESULT_DIR $ILL250_PREFIX
+#bash combine_DRF.ogs $ILL250_DRF_OUTDIR $ILL250_RESULT_DIR $ILL250_PREFIX
 
 # split PacBio output into Low Depth and Low Mapq Bed
-qsub split_DRF_output.ogs $PB_DRF_OUT $PB_RESULT_DIR $PB_PREFIX
+#qsub split_DRF_output.ogs $PB_DRF_OUT $PB_RESULT_DIR $PB_PREFIX
 
 # split 10X output
-qsub split_DRF_output.ogs $TENX_DRF_OUTDIR $TENX_RESULT_DIR $TENX_PREFIX
+#qsub split_DRF_output.ogs $TENX_DRF_OUTDIR $TENX_RESULT_DIR $TENX_PREFIX
 
 # split ONT output 
-qsub split_DRF_output.ogs $ONT_DRF_OUT $ONT_RESULT_DIR $ONT_PREFIX
+#qsub split_DRF_output.ogs $ONT_DRF_OUT $ONT_RESULT_DIR $ONT_PREFIX

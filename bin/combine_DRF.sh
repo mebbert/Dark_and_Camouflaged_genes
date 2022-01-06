@@ -1,18 +1,9 @@
 #!/bin/bash
-#$ -cwd  
-#$ -N 'Combine_DRF'
-#$ -q <queue>
-#$ -M email@institution.edu  
-#$ -pe threaded 16
-#$ -l h_vmem=2G  
-#$ -notify  
-#$ -j y ##merge stderr and stdout
 
-DRF_OUTPUT_DIR=$1
-RESULT_DIR=$2
-RESULT_PREFIX=$3
+DRF_OUTPUT_PATHS=$1
 
-mkdir -p $RESULT_DIR
+drf_files=($DRF_OUTPUT_PATHS)
+RESULT_PREFIX=$2
 
 TMP_DIR="tmp/${JOB_ID}"
 mkdir -p $TMP_DIR
@@ -27,18 +18,17 @@ function combine() {
 
 	touch $LOW_DEPTH_OUT
 	touch $LOW_MAPQ_OUT
-	python combine_DRF_output.py \
+	combine_DRF_output.py \
 		$COMBINE_INPUT \
 		$LOW_DEPTH_OUT \
 		$LOW_MAPQ_OUT
 }
 
-DRF_out=$(ls ${DRF_OUTPUT_DIR}/*.dark.low_mapq.bed | head -1)
-total_lines=$(wc -l $DRF_out | awk '{print $1}')
+total_lines=$(wc -l $drf_files | awk '{print $1}')
 chunks=16
 nline=$(( ($total_lines + $chunks - 1) / $chunks ))
 
-for DRF in $DRF_OUTPUT_DIR/*.dark.low_mapq.bed
+for DRF in ${DRF_OUTPUT_PATHS}
 do
 	base=$(basename $DRF)
 	sample=${base%%.*}
@@ -62,11 +52,9 @@ do
 done
 wait
 
-LOW_DEPTH_OUT=${RESULT_DIR}/${RESULT_PREFIX}.dark.low_depth.bed
-LOW_MAPQ_OUT=${RESULT_DIR}/${RESULT_PREFIX}.dark.low_mapq.bed
+LOW_DEPTH_OUT=${RESULT_PREFIX}.dark.low_depth.bed
+LOW_MAPQ_OUT=${RESULT_PREFIX}.dark.low_mapq.bed
 
-LOW_DEPTH="tmp/160905/low_depth"
-LOW_MAPQ="tmp/160905/low_mapq"
 echo -e "chrom\tstart\tend\tavg_nMapQBelowThreshold\tavg_depth\tavg_percMapQBelowThreshold" > $LOW_DEPTH_OUT
 echo -e "chrom\tstart\tend\tavg_nMapQBelowThreshold\tavg_depth\tavg_percMapQBelowThreshold" > $LOW_MAPQ_OUT
 cat ${LOW_DEPTH}/* >> $LOW_DEPTH_OUT

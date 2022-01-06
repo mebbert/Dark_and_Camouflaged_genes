@@ -1,15 +1,6 @@
-#!/bin/bash
-#$ -cwd  ## start job in current working directory (where it's submitted from)
-#$ -N Combine_and_GenotypeGVCFs_ADSP  ## job name
-#$ -q <queue>  ## queue
-#$ -pe threaded 1
-#$ -l h_vmem=48G  ## Memory request
-#$ -notify  ## tells OGS to allow a 'trap'
-#$ -j y
+#!/bin/usr bash
 
-source $HOME/.bash_profile
-
-TMP_DIR="/tmp/${JOB_ID}"
+TMP_DIR="tmp/${JOB_ID}"
 mkdir -p $TMP_DIR
 
 variant_list=$1

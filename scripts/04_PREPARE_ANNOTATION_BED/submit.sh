@@ -1,5 +1,11 @@
 #!/bin/bash
 
+#SBATCH --time 23:00:00
+#SBATCH --job-name=testStep4
+#SBATCH --nodes=1
+#SBATCH --partition=normal
+#SBATCH -A coa_mteb223_uksr
+
 ## 04_PREPARE_ANNOTATION_BED
 ## Step 4 of our analysis converts Ensembl GFF3 Gene Annotations
 ## from a transcript level to a gene level, using genome arithmetic
@@ -22,9 +28,9 @@
 B37_GFF3="Homo_sapiens.GRCh37.87.gff3" #Path to Ensembl HG37 gene annotation GFF3
 B37_RESULT_DIR="../../results/annotation/b37" #Dir to write resulting bed
 
-B38_GFF3="Homo_sapiens.GRCh38.93.gff3" #Path to Ensembl HG38 gene annotation GFF3
+B38_GFF3="/project/mteb223_uksr/sequencing_resources/annotations/hg38_release_93/Homo_sapiens.GRCh38.93.gff3" #Path to Ensembl HG38 gene annotation GFF3
 B38_RESULT_DIR="../../results/annotation/b38"
 ####################################
 
-bash create_annotation_bed.sh $B37_GFF3 $B37_RESULT_DIR
-bash create_annotation_bed.sh $B38_GFF3 $B38_RESULT_DIR
+# bash create_annotation_bed.sh $B37_GFF3 $B37_RESULT_DIR
+singularity exec ../../../rescue_camo_variants.sif bash create_annotation_bed.sh $B38_GFF3 $B38_RESULT_DIR

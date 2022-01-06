@@ -1,4 +1,4 @@
-#!//usr/bin/python
+#!/usr/bin/env python
 import sys
 
 valid_chroms = list(map(str, range(1,23))) + ['X', 'Y', 'MT']

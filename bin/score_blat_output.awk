@@ -1,4 +1,4 @@
-#!/bin/awk -f
+#!/bin/usr awk -f
 BEGIN {
 	OFS="\t"
 }

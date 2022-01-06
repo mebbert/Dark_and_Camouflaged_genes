@@ -12,8 +12,8 @@ DRF_BED=$1
 LABEL=$2
 COMBINED_OUT=$3
 
-JOB_ID=12345
-TMP_DIR="/tmp/${JOB_ID}"
+#JOB_ID=12345
+TMP_DIR="../../tmp/" #${JOB_ID}"
 
 mkdir -p $TMP_DIR
 
@@ -26,4 +26,4 @@ python calc_median_depth.py $TMP > $OUT
 
 echo -e "${DRF_BED}\t${LABEL}\t$(cat $OUT)" >> $COMBINED_OUT
 
-rm -rvf $TMP_DIR
+#rm -rvf $TMP_DIR

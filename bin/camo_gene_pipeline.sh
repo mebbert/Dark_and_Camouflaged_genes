@@ -1,13 +1,4 @@
 #!/bin/bash
-#$ -cwd  
-#$ -N 'Make_camo_bed'
-#$ -q <queue>
-#$ -M email@institution.edu
-#$ -pe threaded 16
-#$ -l h_vmem=8G  
-#$ -notify  
-#$ -j y ##merge stderr and stdout
-source $HOME/.bash_profile
 
 function usage {
 	echo "usage: $ ./camo_gene_pipeline.sh [options...]"
@@ -69,7 +60,7 @@ then
 	RESULT_DIR=${GVERS}/${SEQUENCER}
 fi
 
-TMP_DIR="tmp/${JOB_ID}/${SEQUENCER}.${GVERS}"
+TMP_DIR="tmp/${SEQUENCER}.${GVERS}"
 mkdir -p $TMP_DIR
 
 ##----Define Variables----------
@@ -114,15 +105,15 @@ mapq_gene_bodies="${TMP_DIR}/low_mapq_gene_bodies.bed"
 mapq_not_camo="${TMP_DIR}/${SEQUENCER}.${GVERS}.low_mapq.NOT_camo.bed"
 
 #Merge coordinates for mapq and depth beds, removing regions that are less than 20bp long
-echo "`date` bedtools merge -d 20-c 5 -o mean,median -i $DEPTH_BED > $merged"
+echo "`date` bedtools merge -d 20-c 5 -o mean,median -i $DEPTH_BED > $depth_merged"
 bedtools merge -d 20 -c 5 -o mean,median -i $DEPTH_BED | \
-	python remove_unassembled_contigs.py | \
+	remove_unassembled_contigs.py | \
 	awk '{ if($3 - $2 > 20) print $0}' \
 	> $depth_merged
 
 echo "`date` bedtools merge -d 20 -c 5 -o mean,median -i $MAPQ_BED > $mapq_merged"
 bedtools merge -d 20 -c 5 -o mean,median -i $MAPQ_BED | \
-	python remove_unassembled_contigs.py | \
+	remove_unassembled_contigs.py | \
 	awk '{ if($3 - $2 > 20) print $0}' \
 	> $mapq_merged
 
@@ -131,7 +122,7 @@ echo -e "region_id\tchrom\tlength" >> $mapq_lengths
 awk '{n +=1; print n,$1,($3 - $2)}' $mapq_merged >> $mapq_lengths
 
 cat $mapq_merged $depth_merged | \
-	bedtools sort -i - -g $faidx | \
+	bedtools sort -i - -faidx $faidx | \
 	bedtools merge -i - \
 	> $dark_merged
 
@@ -141,7 +132,7 @@ bedtools intersect \
 	-a $ANNOTATION \
 	-b $dark_merged \
 	-loj | \
-	python annotate_regions.py \
+	annotate_regions.py \
 		$percent_dark $biotype_dark $coding_dark "dark" \
 		> $dark_annotations
 
@@ -151,7 +142,7 @@ bedtools intersect \
 	-a $ANNOTATION \
 	-b $depth_merged \
 	-loj | \
-	python annotate_regions.py \
+	annotate_regions.py \
 		$percent_depth $biotype_depth $coding_depth "dark by depth" \
 		> $depth_annotations
 
@@ -161,7 +152,7 @@ bedtools intersect \
 	-a $ANNOTATION \
 	-b $mapq_merged \
 	-loj | \
-	python annotate_regions.py \
+	annotate_regions.py \
 		$percent_mapq $biotype_mapq $coding_mapq "dark by MAPQ" \
 		> $mapq_annotations
 
@@ -229,7 +220,7 @@ bedtools intersect \
 # lists all the regions in  acamo set in the realign file and selects the one region form that set that we 
 ## will use to align to (written in the align_to file, all other regions in set will be masked)
 echo "`date` python extract_camo_regions.py"
-python extract_camo_regions.py \
+extract_camo_regions.py \
 	$mapq_annotations \
 	$mapped_blat_results \
 	$realign \
@@ -241,11 +232,11 @@ echo "`date` sorting camo bed files"
 #extract_camo_regions prints out whole camo gene bodies,
 #also same gene bodies may be printed twice, so first merge then
 #intersect with merged_mapq to get just the Camo Region boundaries
-bedtools sort -i $camo_bed -g $faidx | \
+bedtools sort -i $camo_bed -faidx $faidx | \
 	bedtools merge -i - | \
 	bedtools intersect -a - -b $mapq_merged > $camo_sorted
-bedtools sort -i $align_to -g $faidx > $alignto_sorted
-bedtools sort -i $realign  -g $faidx > $realign_sorted
+bedtools sort -i $align_to -faidx $faidx > $alignto_sorted
+bedtools sort -i $realign  -faidx $faidx > $realign_sorted
 
 ## Create Camo Annotation table (intersecting camo regions to gene annotation bed)
 echo "`date` bedtools intersect -a $ANNOTATION -b $camo_sorted -loj | python annotate_regions.py > $camo_annotations"
@@ -253,7 +244,7 @@ bedtools intersect \
 	-a $ANNOTATION \
 	-b $camo_sorted \
 	-loj | \
-	python annotate_regions.py \
+	annotate_regions.py \
 		$percent_camo $biotype_camo $coding_camo "camo" \
 		> $camo_annotations
 

@@ -1,28 +1,12 @@
-#!/bin/bash
-#$ -cwd  ## start job in current working directory (where it's submitted from)
-#$ -N Camo_run ## job name
-#$ -q <queue>  ## queue
-#$ -pe threaded 1
-#$ -l h_vmem=32G  ## Memory request
-#$ -j y
-#$ -notify  ## tells OGS to allow a 'trap'
+#!/bin/usr bash
 
-# source .bash_profile because OGS is lame
-source $HOME/.bash_profile
-
-TEMPORARY_DIR="/tmp/$JOB_ID"
+TEMPORARY_DIR="tmp/$JOB_ID"
 
 #	set up function.  this isn't called/run here.  It's only used
 #   if the job is canceled via a signal
 cleanup_scratch()
 {
 	echo "Deleting inside signal handler, meaning I probably either hit the walltime, or deleted the job"
-
-	# I don't want partial data, so don't copy.
-	#cp -v "$TEMPORARY_DIR/results.dat" "$DATA_DEST_DIR"
-
-	#change to a safe location
-	cd "$HOME"
 
 	#remove the remaining data in $TEMPORARY_DIR
 	#rm -rfv "$TEMPORARY_DIR"
@@ -43,37 +27,22 @@ echo "Job running on: `hostname`"
 echo "Creating TMP dir: $TEMPORARY_DIR"
 mkdir -p $TEMPORARY_DIR
 
-# a range of samples from the complete bam_list.txt to run (inclusive). Should
-# be comma-delmited to work with sed
-sample_range=$1		
-echo $sample_range
-
 # The bed file to use for extracting reads from each sample
-realign_bed=$2		
+realign_bed=$1		
 echo $realign_bed
 
 # The bed file to use for calling variants. This will make GATK much faster.
 # Using a different bed file here because the regions are expanded a bit
 # since reads extend past.
-gatk_bed=$3			
+gatk_bed=$2			
 
 threads=1
 
-GATK_path=$4
-GATK="java -Xmx16g -jar $GATK_path"
-
 #Path prefix to camo-masked references
 # Should look like: path/to/refs/b37-camo_mask
-ref_prefix=$5
-filtered_bam_list=$6
-DATA_DEST_DIR=$7
-
-bam_list=${TEMPORARY_DIR}/bam_list.txt
-
-# Writing bam_list
-echo "sed \"${sample_range}!d\" $filtered_bam_list > $bam_list"
-sed "${sample_range}!d" $filtered_bam_list > $bam_list
-
+ref_prefix=$3
+filtered_bam_list=$4
+DATA_DEST_DIR='/mnt/gpfs3_amd/condo/mteb223/rescue_camo_variants/nextflow/final_files'
 
 # Regex to extract sample name from Bam header
 regex="SM:([A-Za-z0-9_\-]+)"
@@ -164,20 +133,19 @@ do
 
 		echo $gvcf >> ${gvcf_list[$repeat_num]}
 		
-		time $GATK \
-			-T HaplotypeCaller \
+		time gatk HaplotypeCaller \
 			-R $ref \
 			-I $final_bam \
 			-L $gatk_bed \
-			--sample_ploidy $ploidy \
-			--genotyping_mode DISCOVERY \
-			--emitRefConfidence GVCF \
-			--dontUseSoftClippedBases \
-			-o $gvcf
+			--sample-ploidy $ploidy \
+			--genotyping-mode DISCOVERY \
+			--emit-ref-confidence GVCF \
+			--dont-use-soft-clipped-bases \
+			-O $gvcf
 
 		rm ${final_bam}*
 	done
-done < $bam_list
+done < $filtered_bam_list
 
 for repeat_num in $(seq 2 1 $max_repeat)
 do
@@ -185,10 +153,9 @@ do
 	ref="${ref_prefix}.ploidy_${ploidy}.fa"
 	comb_gvcf_file=$DATA_DEST_DIR/camo_gvcfs/ploidy_${ploidy}/$JOB_ID.g.vcf
 	echo "$GATK -T CombineGVCFs -R $ref -o $comb_gvcf_file  --variant ${gvcf_list[$repeat_num]}"
-	$GATK \
-		-T CombineGVCFs \
+	gatk CombineGVCFs \
 		-R $ref \
-		-o $comb_gvcf_file \
+		-O $comb_gvcf_file \
 		--variant ${gvcf_list[$repeat_num]}
 done
 
@@ -196,7 +163,7 @@ done
 ## CLEAN UP #
 #############
 #change to a safe location
-cd "$HOME"
+#cd "$HOME"
 
 #remove the data in $TEMPORARY_DIR
 echo "Removing tmp files files..."

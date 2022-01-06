@@ -1,15 +1,14 @@
-#!/bin/bash
+#!/bin/usr bash
 
 function maskGenome {
 	expanded=$1
 	i=$2
 	REF=$3
-	RESULT_DIR=$4
-	PREFIX=$5
+	PREFIX=$4
 
 	genome=${REF}.fai
 	ploidy=$((2*i))
-	out="${RESULT_DIR}/${PREFIX}.ploidy_${ploidy}.fa"
+	out="${PREFIX}.ploidy_${ploidy}.fa"
 	echo " awk "\$NF == $i" $expanded | bedtools complement -i - -g $genome | bedtools maskfasta -fi $REF -bed - -fo $out"
 	awk "\$NF == $i" $expanded | \
 		bedtools complement \
@@ -26,17 +25,14 @@ function maskGenome {
 	echo " samtools faidx b37-camo_mask.fa"
 	samtools faidx $out
 	echo "picard CreateSequenceDictionary REFERENCE=hg38-camo_mask.fa  OUTPUT=hg38-camo_mask.dict"
-	picard CreateSequenceDictionary \
+	java -jar /usr/bin/picard/build/libs/picard.jar CreateSequenceDictionary \
 		REFERENCE=$out
 		OUTPUT=${out%.*}.dict
 }
 
 camo_bed=$1
 REF=$2
-RESULT_DIR=$3
-PREFIX=$4
-
-mkdir -p $RESULT_DIR
+PREFIX=$3
 
 echo " bedtools slop -b 50 -i $camo_bed -g $genome |  bedtools complement -i - -g $genome | bedtools maskfasta -fi $REF -bed - -fo b37-camo_mask.fa"
 expanded=${camo_bed//.bed/.expanded_50.bed}
@@ -52,7 +48,6 @@ do
 		$expanded \
 		$i \
 		$REF \
-		$RESULT_DIR \
 		$PREFIX &
 done
 wait
