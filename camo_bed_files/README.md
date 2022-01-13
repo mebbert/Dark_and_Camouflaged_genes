@@ -18,9 +18,11 @@ camouflaged region is repeated and the number regions listed in column four)
 
 ## align_to.bed
 
-Should be used in masking the genome to create a camo mask genome. Shows the one region in each
-camo group where all reads for that group should align. This bed is expanded by 50 bp, complemented,
-and then passed into bedtools maskFasta to mask the reference
+Should be used in masking the genome to create a camo mask genome. Includes
+the one region (semi-randomly selected) in each camo group where all reads for that
+group should align. This bed is expanded by 50 bp to ensure we don't miss
+reads on the edge of the camouflaged region. It is complemented and then passed into
+`bedtools maskFasta` to mask the reference.
 
 ## extraction.bed (previously the 'realign.bed').
 

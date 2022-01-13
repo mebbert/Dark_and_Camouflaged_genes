@@ -23,7 +23,10 @@ params.bam_path = "${projectDir}/test_data/UKY_ADSP_crams"
  * (i.e., the camouflaged regions). This MUST contain coordinates based on the
  * reference the samples are *currently* aligned to. It matters where the
  * reference was obtained from (i.e., NCBI, Ensembl, UCSC, etc.); they are NOT
- * interchangeable!
+ * interchangeable! The camouflaged regions will change depending on which
+ * contigs are included in the reference. There are also other more minor
+ * (but super annoying) differences between builds (e.g., chromsome naming
+ * and even sorting).
  *
  * We provide .bed files for the following human reference genomes:
  *   1. TODO: List reference genomes we provide camo beds for.
@@ -46,7 +49,10 @@ params.masked_ref_fasta = "./results/MASK_GENOME/Homo_sapiens.GRCh38.dna.primary
  * Path to the .bed file that GATK will use to call variants. This MUST
  * contain coordinates based on the *MASKED* reference the samples *WILL BE*
  * aligned to in this pipeline. This can be the same reference *VERSION* the
- * samples were previously aligned to, but it must be masked.
+ * samples were previously aligned to, but it must be masked. This .bed file
+ * is similar to the 'align_to.bed' file used to mask the genome, except it is
+ * restricted to the coding (CDS) regions within the camouflaged region,
+ * rather than the entire camouflaged region.
  *
  * We provide the appropriate GATK .bed files for the same human reference
  * genomes as the extraction_bed.
