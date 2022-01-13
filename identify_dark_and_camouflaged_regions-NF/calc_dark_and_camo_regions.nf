@@ -11,8 +11,8 @@ params.ref_index_pac='/project/mteb223_uksr/sequencing_resources/references/hg38
 params.ref_index_ann='/project/mteb223_uksr/sequencing_resources/references/hg38_release_93/Homo_sapiens.GRCh38.dna.primary_assembly.fa.ann'
 params.ref_index_sa='/project/mteb223_uksr/sequencing_resources/references/hg38_release_93/Homo_sapiens.GRCh38.dna.primary_assembly.fa.sa'
 params.ref_index_bwt='/project/mteb223_uksr/sequencing_resources/references/hg38_release_93/Homo_sapiens.GRCh38.dna.primary_assembly.fa.bwt'
-//params.crams = '/pscratch/mteb223_uksr/rescue_camo_variants/maddy_testing_scripts/ADSP_sample_CRAMs/*.cram'
-params.crams = "${PWD}/test_data/ADSP_sample_crams/*"
+params.crams = '/pscratch/mteb223_uksr/rescue_camo_variants/maddy_testing_scripts/ADSP_sample_CRAMs/*.cram'
+//params.crams = '/pscratch/mteb223_uksr/rescue_camo_variants/maddy_testing_scripts/nextflow/test_data/ADSP_sample_crams/*'
 params.ref_tag = 'hg38'
 params.gff = '/project/mteb223_uksr/sequencing_resources/annotations/hg38_release_93/Homo_sapiens.GRCh38.93.gff3'
 params.threads = 16
@@ -20,6 +20,10 @@ params.sequencer = 'illuminaRL100'
 params.output_dir = './results_dir'
 params.prefix = 'IlluminaRL100.hg38.combined'
 
+/*
+ * Prefix for masked reference files.
+ */
+params.mask_ref_prefix = 'hg38_camo_mask'
 
 log.info """\
  CALCULATE DARK AND CAMO REGIONS PIPELINE

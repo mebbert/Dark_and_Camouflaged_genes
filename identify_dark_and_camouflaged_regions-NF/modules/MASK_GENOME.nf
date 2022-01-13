@@ -1,6 +1,8 @@
-process step_06_MASK_GENOME {
+process MASK_GENOME {
+
+    publishDir 'results/MASK_GENOME'
 	
-	label 'local'
+	label 'MASK_GENOME'
 
 	input:
 		path(align_to_bed)
@@ -9,13 +11,11 @@ process step_06_MASK_GENOME {
 		val(mask_ref_prefix)
 
 	output:
-		path '*.fa', emit: masked_fastas
-		path '*.dict', emit: sequence_dicts
-		path '*.fa.*', emit: fasta_idx 
+		path('*.fa', emit: masked_ref_fasta)
+		path('*.fa.*', emit: masked_ref_idx)
 
 	script:
 		"""
 		bash create_camo_mask.sh $align_to_bed $ref $mask_ref_prefix
-
 		"""
 }

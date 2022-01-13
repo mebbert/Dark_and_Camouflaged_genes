@@ -8,15 +8,13 @@ set -x
 # of the three so all reads will align to a single region (to remove alignment
 # ambiguity).
 function maskGenome {
-	expanded=$1
-	i=$2
-	REF=$3
-	PREFIX=$4
+	expanded_bed=$1
+	REF=$2
+	PREFIX=$3
 
 	genome=${REF}.fai
-	ploidy=$((2*i))
-	out="${PREFIX}.ploidy_${ploidy}.fa"
-	awk "\$NF == $i" $expanded | \
+	out="${PREFIX}.fa"
+	awk "\$NF == $i" $expanded_bed | \
 		bedtools complement \
 			-i - \
 			-g $genome | \
@@ -33,35 +31,22 @@ function maskGenome {
 		OUTPUT=${out%.*}.dict
 }
 
-camo_bed=$1
+align_to_bed=$1
 REF=$2
 PREFIX=$3
 
 # Create an expanded bed files to allow reads that overlap with the region to
 # align easily (including on the ends of the region).
-expanded=${camo_bed//.bed/.expanded_50.bed}
+expanded_bed=${align_to_bed//.bed/.expanded_50.bed}
 bedtools slop \
 	-b 50 \
-	-i $camo_bed \
+	-i $align_to_bed \
 	-g ${REF}.fai \
-	> $expanded
+	> $expanded_bed
 
 
-# For set of regions with identical matches from 2:5, mask the genome. We deal
-# with each ploidy individually because it affects how we call variants. Ploidy
-# goes up by the number of regions that are identical. e.g., if there are three
-# regions that are identical, ploidy is 2*3 = 6. We stop at five identical regions
-# because we do not have much confidence in calls beyond that; it's an area of
-# research.
-for i in $(seq 2 1 5)
-do
-	maskGenome \
-		$expanded \
-		$i \
-		$REF \
-		$PREFIX &
-done
-
-# Wait for all jobs launched in background to complete. Then return.
-wait
+maskGenome \
+	$expanded_bed \
+	$REF \
+	$PREFIX
 
