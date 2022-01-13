@@ -40,7 +40,7 @@ params.extraction_bed = './test_data/illuminaRL100.hg38.camo.align_to.sorted.bed
  * variants. This reference must be prepared using our pipeline to identify
  * camouflaged regions.
  */
-params.masked_ref_fasta = "${projectDir}/../references/MASK_GENOME/hg38_camo_mask.ploidy_4.fa"
+params.masked_ref_fasta = "./results/MASK_GENOME/Homo_sapiens.GRCh38.dna.primary_assembly-MASKED.fa"
 
 /*
  * Path to the .bed file that GATK will use to call variants. This MUST
@@ -106,11 +106,13 @@ n_samples_per_batch = params.n_samples_per_batch
 max_repeats_to_rescue = params.max_repeats_to_rescue
 
 workflow{
+/*
     MASK_GENOME(extraction_bed,
             "${projectDir}/../references/hg38_release_93/Homo_sapiens.GRCh38.dna.primary_assembly.fa",
             "${projectDir}/../references/hg38_release_93/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai",
             'Homo_sapiens.GRCh38.dna.primary_assembly-MASKED')
-    // RESCUE_CAMO_VARS_WF(bam_path, extraction_bed, masked_ref_fasta, gatk_bed, 
-                         // n_samples_per_batch, max_repeats_to_rescue)
+*/
+    RESCUE_CAMO_VARS_WF(bam_path, extraction_bed, masked_ref_fasta, gatk_bed, 
+                         n_samples_per_batch, max_repeats_to_rescue)
 }
 
