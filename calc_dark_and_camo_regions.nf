@@ -4,15 +4,15 @@ nextflow.enable.dsl=2
 // Pipeline parameter default values, can be modified by user when calling pipeline on command line (e.g. --ref reference.fa) ##
 
 params.cram_ref = '/pscratch/mteb223_uksr/rescue_camo_variants/maddy_testing_scripts/GRCh38_full_analysis_set_plus_decoy_hla.fa' //add a default value
-params.ref = '/project/mteb223_uksr/sequencing_resources/references/hg38_release_93/Homo_sapiens.GRCh38.dna.primary_assembly.fa'
-params.ref_index='/project/mteb223_uksr/sequencing_resources/references/hg38_release_93/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai'
-params.ref_index_amb='/project/mteb223_uksr/sequencing_resources/references/hg38_release_93/Homo_sapiens.GRCh38.dna.primary_assembly.fa.amb'
-params.ref_index_pac='/project/mteb223_uksr/sequencing_resources/references/hg38_release_93/Homo_sapiens.GRCh38.dna.primary_assembly.fa.pac'
-params.ref_index_ann='/project/mteb223_uksr/sequencing_resources/references/hg38_release_93/Homo_sapiens.GRCh38.dna.primary_assembly.fa.ann'
-params.ref_index_sa='/project/mteb223_uksr/sequencing_resources/references/hg38_release_93/Homo_sapiens.GRCh38.dna.primary_assembly.fa.sa'
-params.ref_index_bwt='/project/mteb223_uksr/sequencing_resources/references/hg38_release_93/Homo_sapiens.GRCh38.dna.primary_assembly.fa.bwt'
+params.ref = "${projectDir}/references/Homo_sapiens.GRCh38_onlyChr22.fa"
+params.ref_index="${projectDir}/references/Homo_sapiens.GRCh38_onlyChr22.fa.fai"
+params.ref_index_amb="${projectDir}/references/Homo_sapiens.GRCh38_onlyChr22.fa.amb"
+params.ref_index_pac="${projectDir}/references/Homo_sapiens.GRCh38_onlyChr22.fa.pac"
+params.ref_index_ann="${projectDir}/references/Homo_sapiens.GRCh38_onlyChr22.fa.ann"
+params.ref_index_sa="${projectDir}/references/Homo_sapiens.GRCh38_onlyChr22.fa.sa"
+params.ref_index_bwt="${projectDir}/references/Homo_sapiens.GRCh38_onlyChr22.fa.bwt"
 //params.crams = '/pscratch/mteb223_uksr/rescue_camo_variants/maddy_testing_scripts/ADSP_sample_CRAMs/*.cram'
-params.crams = "${PWD}/test_data/ADSP_sample_crams/*"
+params.crams = "${projectDir}/test_data/ADSP_sample_crams/*"
 params.ref_tag = 'hg38'
 params.gff = '/project/mteb223_uksr/sequencing_resources/annotations/hg38_release_93/Homo_sapiens.GRCh38.93.gff3'
 params.threads = 16
