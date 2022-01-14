@@ -35,15 +35,15 @@ params.bam_path = "${projectDir}/test_data/UKY_ADSP_crams"
  * already identified camouflaged regions for, it can be prepared using our
  * pipeline for identifying camouflaged regions (de novo).
  */
-params.extraction_bed = './test_data/illuminaRL100.hg38.camo.align_to.sorted.bed'
+params.extraction_bed = "${projectDir}/test_data/CR1-extraction-1KG_ref.bed"
 
 /*
- * The MASKED reference to be aligned to. If the reference provided here has
+ * The MASKED reference to be *ALIGNED TO*. If the reference provided here has
  * not been masked for camouflaged regions, we cannot rescue camouflaged
  * variants. This reference must be prepared using our pipeline to identify
  * camouflaged regions.
  */
-params.masked_ref_fasta = "./results/MASK_GENOME/Homo_sapiens.GRCh38.dna.primary_assembly-MASKED.fa"
+params.masked_ref_fasta = "${projectDir}/results/MASK_GENOME/Homo_sapiens.GRCh38.dna.primary_assembly-MASKED.fa"
 
 /*
  * Path to the .bed file that GATK will use to call variants. This MUST
@@ -57,7 +57,7 @@ params.masked_ref_fasta = "./results/MASK_GENOME/Homo_sapiens.GRCh38.dna.primary
  * We provide the appropriate GATK .bed files for the same human reference
  * genomes as the extraction_bed.
  */
-params.gatk_bed = './test_data/illuminaRL100.hg38.camo.GATK.bed'
+params.gatk_bed = "${projectDir}/test_data/CR1-GATK-Ensembl.bed"
 
 /*
  * Define the number of samples to run in a single rescue batch. This can
