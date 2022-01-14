@@ -1,0 +1,126 @@
+Bootstrap: docker
+From: ubuntu:18.04
+
+%files
+
+%environment
+	MACHTYPE=x86_64
+        export MACHTYPE
+    export PATH=/usr/local/bin:$PATH
+    export PATH="$PATH:/usr/bin/samtools-1.14"
+    export PATH="$PATH:/usr/bin/htslib-1.14"
+	export PATH="$PATH:/usr/bin/bwa-0.7.17"
+	export PATH="$PATH:/usr/bin/bedtools2/bin"
+	export PATH="$PATH:/bin/$MACHTYPE"
+	export PICARD="/usr/bin/picard.jar"
+#	export PICARD="/usr/bin/picard/build/libs/picard.jar"
+	export PATH="$PATH:/usr/bin/gatk-4.2.4.1/"
+#	export GATK="/usr/bin/gatk/gatk"
+	export PATH="$PATH:/usr/bin/"
+	
+
+%labels
+
+    AUTHOR madeline.page@uky.edu
+    Maintainer "Madeline Page"
+
+%post
+
+    echo "The post section is where you can install, and configure your container."
+
+    TZ=America/New_York
+    DEBIAN_FRONTEND=noninteractive
+    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+    DEBIAN_FRONTEND=noninteractive apt-get -y update
+
+    apt-get install -y wget gnupg git git-lfs python3 python default-jdk
+    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E298A3A825C0D65DFD57CBB651716619E084DAB9
+    apt install software-properties-common -y
+   add-apt-repository 'deb https://cloud.r-project.org/bin/linux/ubuntu bionic-cran40/'
+    DEBIAN_FRONTEND=noninteractive apt install r-base -y
+	apt-get install -y autoconf automake make gcc perl zlib1g-dev libbz2-dev liblzma-dev libcurl4-gnutls-dev libssl-dev libncurses5-dev
+
+    cd /usr/bin
+    wget https://github.com/samtools/htslib/releases/download/1.14/htslib-1.14.tar.bz2
+    tar -vxjf htslib-1.14.tar.bz2
+    cd htslib-1.14
+    make
+
+    cd ..
+    wget https://github.com/samtools/samtools/releases/download/1.14/samtools-1.14.tar.bz2
+    tar -vxjf samtools-1.14.tar.bz2
+    cd samtools-1.14
+    make
+
+	cd ..
+	wget https://github.com/arq5x/bedtools2/releases/download/v2.30.0/bedtools-2.30.0.tar.gz
+	tar -vxzf bedtools-2.30.0.tar.gz
+	cd bedtools2
+	make
+
+	cd ..
+	wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+	chmod +x Miniconda3-latest-Linux-x86_64.sh
+	./Miniconda3-latest-Linux-x86_64.sh -b -p /usr/bin/miniconda
+
+	wget https://github.com/lh3/bwa/releases/download/v0.7.17/bwa-0.7.17.tar.bz2
+	tar -vxjf bwa-0.7.17.tar.bz2
+	cd bwa-0.7.17
+	make
+
+	cd ..
+	wget http://downloads.sourceforge.net/project/libpng/libpng16/older-releases/1.6.2/libpng-1.6.2.tar.gz
+	tar -xvzf libpng-1.6.2.tar.gz
+	cd libpng-1.6.2/
+	./configure --prefix=`pwd`
+	make
+	make install
+	LIBPNGDIR=`pwd`
+	
+	cd ..
+	wget http://users.soe.ucsc.edu/~kent/src/blatSrc35.zip
+	unzip blatSrc35.zip
+	cd blatSrc/
+	cp $LIBPNGDIR/png.h lib/
+	cp $LIBPNGDIR/pngconf.h lib/
+	cp $LIBPNGDIR/pnglibconf.h lib/
+	MACHTYPE=x86_64
+	export MACHTYPE
+	mkdir -p /bin/$MACHTYPE
+	make
+
+#	cd ..
+#	git clone https://github.com/broadinstitute/picard.git
+#	cd picard/
+#	./gradlew shadowJar
+
+	cd ..
+	wget https://github.com/broadinstitute/picard/releases/download/2.26.10/picard.jar
+
+	wget https://github.com/broadinstitute/gatk/releases/download/4.2.4.1/gatk-4.2.4.1.zip
+	unzip gatk-4.2.4.1.zip
+	
+
+#	cd ..
+#	git clone https://github.com/broadinstitute/gatk.git
+#	cd gatk/
+#	git fetch
+#	git checkout lb_add_back_jcenter
+#	./gradlew bundle
+
+	export MACHTYPE=x86_64
+    export PATH="$PATH:/usr/bin/samtools-1.14"
+    export PATH="$PATH:/usr/bin/htslib-1.14"
+	export PATH="$PATH:/usr/bin/bedtools2/bin"
+	export PATH="$PATH:/usr/bin/bwa-0.7.17"
+	export PATH="$PATH:/bin/$MACHTYPE"
+	export PICARD="/usr/bin/picard.jar"
+#	export PICARD="/usr/bin/picard/build/libs/picard.jar"
+	export PATH="$PATH:/usr/bin/gatk-4.2.4.1/"
+#	export GATK="/usr/bin/gatk/gatk"
+
+
+%help
+    A baseline container of ubuntu:18.04 - rescue camo variants container with latest version of tools
+
+
