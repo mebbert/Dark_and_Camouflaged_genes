@@ -9,7 +9,4 @@
 #SBATCH -A coa_mteb223_uksr 	    				# Project allocation account name (REQUIRED)
 
 module load ccs/java/jdk1.8.0_202
-
-gatk --java-options -Xmx20G HaplotypeCaller
-
-#nextflow run rescue_camo_variants.nf
+nextflow run rescue_camo_variants.nf

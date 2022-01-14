@@ -50,8 +50,14 @@ process RESCUE_CAMO_VARS_PROC {
 // 		path '*.g.vcf', emit: camo_gvcfs
 
 	script:
+
+    /*
+     * params.clean_tmp_files is a global variable defining whether to remove
+     * tmp files for processes that could overwhelm a file system (depending on
+     * how large the run is).
+     */
 	"""
-		bash rescue_camo_variants.sh $masked_ref_fasta $extraction_bed $gatk_bed $bam_set $max_repeats_to_rescue
+		bash rescue_camo_variants.sh $masked_ref_fasta $extraction_bed $gatk_bed $bam_set $max_repeats_to_rescue ${params.clean_tmp_files}
 	"""
 }
 

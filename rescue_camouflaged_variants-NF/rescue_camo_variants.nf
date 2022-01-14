@@ -80,6 +80,13 @@ params.results_dir = "./results"
 params.max_repeats_to_rescue = 5
 
 /*
+ * Parameter defining whether to clean tmp files throughout the run. Depending
+ * on how many samples are being run, this can generate tens-of-thousands of files,
+ * though they are generally relatively small.
+ */
+params.clean_tmp_files = false 
+
+/*
  * TODO: What was this for?
  */
 params.ref_tag = 'hg38'
@@ -112,13 +119,13 @@ n_samples_per_batch = params.n_samples_per_batch
 max_repeats_to_rescue = params.max_repeats_to_rescue
 
 workflow{
-/*
-    MASK_GENOME(extraction_bed,
+    MASK_GENOME("${projectDir}/test_data/illuminaRL100.hg38.camo.align_to.sorted.bed",
             "${projectDir}/../references/hg38_release_93/Homo_sapiens.GRCh38.dna.primary_assembly.fa",
             "${projectDir}/../references/hg38_release_93/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai",
             'Homo_sapiens.GRCh38.dna.primary_assembly-MASKED')
-*/
+/*
     RESCUE_CAMO_VARS_WF(bam_path, extraction_bed, masked_ref_fasta, gatk_bed, 
                          n_samples_per_batch, max_repeats_to_rescue)
+*/
 }
 

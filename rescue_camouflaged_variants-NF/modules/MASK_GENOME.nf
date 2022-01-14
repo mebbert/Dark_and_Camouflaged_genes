@@ -17,7 +17,7 @@ process MASK_GENOME {
 	output:
 		path('*.fa', emit: masked_ref_fasta)
 		path('*.fa.*', emit: masked_ref_idx)
-		path('*.dict', emit: masked_ref_idx)
+		path('*.dict', emit: masked_ref_dict)
 
 	script:
 		"""
