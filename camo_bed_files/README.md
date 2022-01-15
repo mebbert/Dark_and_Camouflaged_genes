@@ -23,11 +23,11 @@ identical regions; we call it the "align_to" bed because it contains the regions
 will be left *unmasked*. Essientially, it includes the one region (semi-randomly selected)
 in each camo group where all reads for that group of identical sequence should align. This
 removes alignment ambiguity for the aligner so that the reads get a strong mapping quality
-(MAPQ), making it possible to call variants for those regions (all treated as one). This
-bed is also expanded by 50 bp to ensure we don't lose reads on the edge of the camouflaged
-region. To mask the genome, the `align_to.bed` file is first complemented
-(`bedtools complement`) and the complement is passed into `bedtools maskFasta` to mask the
-reference.
+(MAPQ), making it possible to call variants for those regions (all treated as one). To mask
+the genome, the `align_to.bed` file is first expanded by 50 bp (`bedtools slop`) to ensure
+we don't lose reads on the edge of the camouflaged region, and is then complemented
+(`bedtools complement`) to invert the `.bed` file. The complement is then passed into
+`bedtools maskFasta` to mask the reference.
 
 ## extraction.bed (previously the 'realign.bed').
 

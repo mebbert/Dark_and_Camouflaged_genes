@@ -14,7 +14,7 @@ function maskGenome {
 
 	unmasked_ref_index=${UNMASKED_REF}.fai
 	masked_ref="${PREFIX}.fa"
-	awk "\$NF == $i" $EXPANDED_BED | \
+	cat $EXPANDED_BED | \
 		bedtools complement \
 			-i - \
 			-g $unmasked_ref_index | \
