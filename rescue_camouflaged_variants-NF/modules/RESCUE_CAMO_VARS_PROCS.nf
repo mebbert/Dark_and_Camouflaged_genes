@@ -5,28 +5,73 @@ import groovy.io.FileType
  */
 nextflow.enable.dsl=2
 
+params.GVCF_DIRECTORY = './path/to/directories'
+
 workflow RESCUE_CAMO_VARS_WF {
     take:
         bam_path
         extraction_bed
-        masked_ref_fastas
+        masked_ref_fasta
         gatk_bed
         n_samples_per_batch
         max_repeats_to_rescue
 
     main:
 
-        println bam_path
         PREP_BATCH_FILES_PROC(bam_path, n_samples_per_batch)
         RESCUE_CAMO_VARS_PROC(
                                 extraction_bed,
-                                masked_ref_fastas,
+                                masked_ref_fasta,
                                 gatk_bed,
                                 PREP_BATCH_FILES_PROC.out.bam_sets.flatten(),
                                 max_repeats_to_rescue
                               )
 
-        GENERATE_MASTER_GVCF_LIST_PROC(RESCUE_CAMO_VARS_PROC.camo_gvcf_dirs.collect())
+    /*
+     * Prepare input parameters for COMBINE_AND_GENOTYPE
+     */
+    Channel.fromPath( gatk_bed ) \
+        | splitCsv(sep: '\t') \
+        | map { line ->
+            tuple( line[4].toInteger(), "${line[0]}:${line[1]}-${line[2]}" )
+        } \
+        | set { regions }
+
+//     test = ""
+// 
+//     RESCUE_CAMO_VARS_PROC.out.camo_gvcf_parent_dir.concatenate() // /**/*.g.vcf"
+//     RESCUE_CAMO_VARS_PROC.out.camo_gvcf_parent_dir.subscribe{ test += it.name } // /**/*.g.vcf"
+// 
+//     dfile = file('debug.txt')
+//     dfile.append("GVCF parent dir: \n")
+//     dfile.append(RESCUE_CAMO_VARS_PROC.out.camo_gvcf_parent_dir.view().toString() + "\n")
+//     dfile.append(params.GVCF_DIRECTORY.toString() + "\n")
+//     dfile.append("Test: " + test + "\n")
+//     dfile.append(test)
+    
+    /*
+     * TODO: Figure out how to access the emitted path to the .gvcfs
+     * from RESCUE_CAMO_VARS_PROC so that we don't have to rely on the
+     * saved results and hard code the directory.
+     */
+    GVCF_dir = file("${params.results_dir}/RESCUE_CAMO_VARS")
+    c_and_g_input_params = Channel.fromPath( "${GVCF_dir}/**/*.g.vcf" ) \
+         .map { tuple( GVCF_dir.relativize(it).subpath(1,2).name, it ) }
+         .groupTuple()
+         .map { dirname, gvcf_files ->
+             def ploidy = dirname.replaceFirst(/^.*_/, "").toInteger()
+             def repeat = ploidy.intdiv(2)
+             def ref_fasta = file( masked_ref_fasta )
+             tuple( repeat, dirname, ref_fasta, gvcf_files )
+         }
+         .combine( regions, by: 0 )
+         .map { repeat, dirname, ref_fasta, gvcf_files, region ->
+             tuple( dirname, region, ref_fasta, gvcf_files )
+         }
+         
+    // c_and_g_input_params.view()
+    // COMBINE_AND_GENOTYPE_PROC(c_and_g_input_params, RESCUE_CAMO_VARS_PROC.out.rescue_complete)
+    COMBINE_AND_GENOTYPE_PROC(c_and_g_input_params)
 }
 
 
@@ -99,7 +144,8 @@ process RESCUE_CAMO_VARS_PROC {
         val(max_repeats_to_rescue)
 
  	output:
- 		path 'camo_gvcfs/*', emit: camo_gvcf_dirs
+ 		path 'camo_batch_gvcfs/', emit: camo_gvcf_parent_dir
+        val 'complete', emit: rescue_complete
 
 	script:
 
@@ -113,72 +159,75 @@ process RESCUE_CAMO_VARS_PROC {
 	"""
 }
 
-/*
- * Prepare files and inputs for the COMBINE_AND_GENOTYPE_SAMPLES
- * process.
- */
-/*
-process PREP_COMBINE_AND_GENOTYPE_SAMPLES_PROC {
 
-    label 'local'
+/*
+ *
+ */
+process COMBINE_AND_GENOTYPE_PROC {
+
+    publishDir "${params.results_dir}/COMBINE_AND_GENOTYPE/${ploidy_group}"
+
+	label 'COMBINE_AND_GENOTYPE'
 
     input:
-        path gvcf_dir
+
+    /*
+     * Receiving as ref_fasta and gvcf_files as 'val' input so that NextFlow
+     * will not 'stage' the files in the working directory because it doesn't
+     * stage the index files with them. The other option would be to also receive
+     * the index files as paths so both are staged.
+     */
+    tuple val(ploidy_group), val(region_string), val(ref_fasta), val(gvcf_files)
+
+    /*
+     * Passing in this value from RESCUE_CAMO_VARS_PROC to signal that
+     * this process must wait for the rescue to complete.
+     */
+    // val(rescue_complete) 
 
     output:
-        path 'split_list*', emit: filtered_lists
-        tuple file(), val(), file(), file(), emit: set_of_values
+    tuple val(ploidy_group), val(region_string), path("full_cohort.combined.${region}.g.vcf")
 
     script:
+
+    region = region_string.replaceAll(':', '_')
+
+    def avail_mem = task.memory ? task.memory.toGiga() : 0
+
+    def Xmx = avail_mem >= 8 ? "-Xmx${avail_mem - 1}G" : ''
+    def Xms = avail_mem >= 8 ? "-Xms${avail_mem.intdiv(2)}G" : ''
+
     """
-        for dir in ${gvcf_dirs}/*
-        do
-            ploidy=\$(basename \$dir)
-            repeat=\$((\${ploidy##*_} / 2))
 
-            gvcf_list="\${ploidy}.gvcfs.list"
-            find \$dir -name "*.g.vcf" > \$gvcf_list
+    echo "Ploidy group: $ploidy_group"
+    echo "Region: $region_string"
+    echo "Ref: $ref_fasta"
 
-            REF=$masked_ref_fasta
-            awk "\$5 == \$repeat {print \$1\":\"\$2\"-\"\$3}" \$GATK_bed | \
-                while read region
-                do
-                    echo \$region
-                    echo \$REF
-                    echo \$gvcf_list
-                    echo \$result_dir
-                done
+    for gvcf_file in $gvcf_files
+    do
+        echo "GVCF file: \$gvcf_file"
+    done
 
-        done
-    """
-}
-*/
+    cat << __EOF__ > "${ploidy_group}.gvcf.list"
+    ${gvcf_files.join('\n'+' '*4)}
+    __EOF__
 
+    gatk \\
+        --java-options "${Xmx} ${Xms} -XX:+UseSerialGC" \\
+        CombineGVCFs \\
+        -R "${ref_fasta}" \\
+        -L "${region_string}" \\
+        -O "full_cohort.combined.${region}.g.vcf" \\
+        -V "${ploidy_group}.gvcf.list"
 
-/*
- * The process to take all .gvcfs created in RESCUE_CAMO_VARS_PROC
- * and combine them into a single .gvcf (i.e., combine all samples)
- */
-/*
-process COMBINE_AND_GENOTYPE_SAMPLES_PROC {
-
-    label 'COMBINE_AND_GENOTYPE_SAMPLES'
-
-    input:
-        path(realign_bed)
-        path(gatk_bed)
-        path(gatk_jar)
-        val(ref_prefix)
-        path(filtered_list)
-
-    output:
-        path '*.dark.low_depth.bed', emit: low_depth_out
-        path '*.dark.low_mapq.bed', emit: low_mapq_out
-
-    script:
-    """
-        bash combine_and_genotype.sh $ $ $ $ $ $
+    gatk \\
+        --java-options "${Xmx} ${Xms} -XX:+UseSerialGC" \\
+        GenotypeGVCFs \\
+        -R "${ref_fasta}" \\
+        -L "${region_string}" \\
+        -O "full_cohort.combined.${region}.vcf" \\
+        -V "full_cohort.combined.${region}.g.vcf" \\
+        -A GenotypeSummaries
     """
 }
-*/
 

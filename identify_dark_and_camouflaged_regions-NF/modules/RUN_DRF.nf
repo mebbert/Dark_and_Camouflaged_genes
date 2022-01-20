@@ -1,5 +1,11 @@
 process RUN_DRF {
 	
+    /*
+     * Publish results. 'mode: copy' will copy the files into the publishDir
+     * rather than only making links.
+     */
+    publishDir("${params.results_dir}/RUN_DRF", mode: 'copy')
+
 	label 'run_drf'
 
 	input:

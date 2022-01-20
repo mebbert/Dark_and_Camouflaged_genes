@@ -1,5 +1,11 @@
 process COMBINE_DRF_OUTPUT {
 	
+    /*
+     * Publish results. 'mode: copy' will copy the files into the publishDir
+     * rather than only making links.
+     */
+    publishDir("${params.results_dir}/COMBINE_DRF_OUTPUT", mode: 'copy')
+
 	label 'combine_drf_output'
 
 	input:

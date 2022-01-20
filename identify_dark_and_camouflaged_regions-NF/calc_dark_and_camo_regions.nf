@@ -25,7 +25,7 @@ params.ref_tag = 'hg38'
 params.gff = "${projectDir}/../sequencing_resources/annotations/Ensembl/hg38_release_93/Homo_sapiens.GRCh38.93.gff3"
 params.threads = 16
 params.sequencer = 'illuminaRL100'
-params.output_dir = './results_dir'
+params.results_dir = './results'
 params.prefix = 'IlluminaRL100.hg38.combined'
 
 /*

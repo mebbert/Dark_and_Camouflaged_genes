@@ -43,8 +43,7 @@ params.extraction_bed = "${projectDir}/test_data/CR1-extraction-1KG_ref.bed"
  * variants. This reference must be prepared using our pipeline to identify
  * camouflaged regions.
  */
-//params.masked_ref_fasta = "${projectDir}/results/MASK_GENOME/Homo_sapiens.GRCh38.dna.primary_assembly-MASKED.fa"
-params.masked_ref_fasta = "${projectDir}/../references/hg38_release_93/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+params.masked_ref_fasta = "${projectDir}/results/MASK_GENOME/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.fa"
 
 /*
  * Path to the .bed file that GATK will use to call variants. This MUST
@@ -58,7 +57,7 @@ params.masked_ref_fasta = "${projectDir}/../references/hg38_release_93/Homo_sapi
  * We provide the appropriate GATK .bed files for the same human reference
  * genomes as the extraction_bed.
  */
-params.gatk_bed = "${projectDir}/test_data/CR1-GATK-Ensembl.bed"
+params.gatk_bed = "${projectDir}/test_data/CR1-GATK-1KG_ref.bed"
 
 /*
  * Define the number of samples to run in a single rescue batch. This can
@@ -120,14 +119,14 @@ n_samples_per_batch = params.n_samples_per_batch
 max_repeats_to_rescue = params.max_repeats_to_rescue
 
 workflow{
+/*
     MASK_GENOME("${projectDir}/test_data/illuminaRL100.hg38.camo.align_to.sorted.bed",
             "${projectDir}/../references/GRCh38_no_alt_plus_hs38d1/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna",
             "${projectDir}/../references/GRCh38_no_alt_plus_hs38d1/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.fai",
             'GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna')
+*/
 
-/*
     RESCUE_CAMO_VARS_WF(bam_path, extraction_bed, masked_ref_fasta, gatk_bed, 
                          n_samples_per_batch, max_repeats_to_rescue)
-*/
 }
 

@@ -1,6 +1,11 @@
 process CREATE_BED_FILE {
 	
-	publishDir "${projectDir}/../results/create_bed_file", mode: 'copy'
+    /*
+     * Publish results. 'mode: copy' will copy the files into the publishDir
+     * rather than only making links.
+     */
+    publishDir("${params.results_dir}/CREATE_BED_FILE", mode: 'copy')
+	// publishDir "${projectDir}/../results/create_bed_file", mode: 'copy'
 
 	label 'create_bed_file'
 

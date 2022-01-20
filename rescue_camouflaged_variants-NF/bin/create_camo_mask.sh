@@ -14,14 +14,17 @@ function maskGenome {
 
 	unmasked_ref_index=${UNMASKED_REF}.fai
 	masked_ref="${PREFIX}.fa"
-	cat $EXPANDED_BED | \
+	if ! cat $EXPANDED_BED | \
 		bedtools complement \
 			-i - \
 			-g $unmasked_ref_index | \
 		bedtools maskfasta \
 			-fi $UNMASKED_REF \
 			-bed - \
-			-fo $masked_ref
+			-fo $masked_ref; then
+		echo "bedtools failed to mask the ref fasta"
+		exit 1
+	fi
 
 	## Prepare the new masked file for bwt
 	bwa index -a bwtsw $masked_ref
@@ -36,11 +39,14 @@ PREFIX=$3
 # Create an expanded bed files to allow reads that overlap with the region to
 # align easily (including on the ends of the region).
 EXPANDED_BED=${ALIGN_TO_BED//.bed/.expanded_50.bed}
-bedtools slop \
+if ! bedtools slop \
 	-b 50 \
 	-i $ALIGN_TO_BED \
 	-g ${REF}.fai \
-	> $EXPANDED_BED
+	> $EXPANDED_BED; then
+	echo "bedtools failed to invert the bed file for masking"
+	exit 1
+fi
 
 
 maskGenome \

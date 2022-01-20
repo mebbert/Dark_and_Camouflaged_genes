@@ -45,7 +45,6 @@ clean_tmp_files=$6
 for repeat_num in $(seq $min_repeat 1 $max_repeat)
 do
 	ploidy=$(( 2 * $repeat_num ))
-	mkdir -p camo_gvcfs/ploidy_${ploidy}/
 	ploidy_list="gvcfs_ploidy${ploidy}.list"
 	gvcf_list[$repeat_num]=$ploidy_list
 done 
@@ -204,11 +203,21 @@ do
 	fi
 
 	ploidy=$(( 2 * $repeat_num ))
-	comb_gvcf_file=camo_gvcfs/ploidy_${ploidy}/samples_${first_sample}_through_${last_sample}.g.vcf
+	comb_gvcf_file=camo_batch_gvcfs/ploidy_${ploidy}/samples_${first_sample}_through_${last_sample}.g.vcf
+
+	# Create a results directory for this ploidy since we know
+	# there will be results for it.
+	mkdir -p camo_batch_gvcfs/ploidy_${ploidy}/
+
 	time $GATK CombineGVCFs \
 		-R $ref \
 		-O $comb_gvcf_file \
 		--variant ${gvcf_list[$repeat_num]}
+
+	# Index the gvcf so that it can be accessed 'randomly'
+	# by CombineGVCFs
+	time $GATK IndexFeatureFile \
+		-F $comb_gvcf_file
 
 done
 

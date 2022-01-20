@@ -1,5 +1,11 @@
 process REALIGN_BAMS {
 	
+    /*
+     * Publish results. 'mode: copy' will copy the files into the publishDir
+     * rather than only making links.
+     */
+    publishDir("${params.results_dir}/REALIGN_BAMS", mode: 'copy')
+
 	label 'realign_bams'
 
 	input:
