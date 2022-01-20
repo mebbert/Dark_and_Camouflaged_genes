@@ -37,6 +37,9 @@ echo "Max repeats: $max_repeat"
 # Otherwise it wouldn't be camouflaged.
 min_repeat=2 # 
 
+# Whether to clean tmp files on the fly. This process could could overwhelm a
+# file system (depending on how large the run is).
+clean_tmp_files=$6
 
 # Create a new list for GATK for each ploidy
 for repeat_num in $(seq $min_repeat 1 $max_repeat)
@@ -90,11 +93,15 @@ do
 	echo "Found sample name: $sampleName"
 	if [[ "$index" -eq 0 ]]; then
 		first_sample=$sampleName
+	fi
+
+	# Increment
+	index=$((index+1))
 
 	# Always set last_sample to sampleName. It will be on the last loop.
 	last_sample=$sampleName
 
-	tmp_bam=${sampleName}.sorted.bam
+	tmp_bam=${sampleName}.sorted_by_name.bam
 
 	#######################################
 	# Rescue variants for each ploidy set #
@@ -179,7 +186,9 @@ do
 
 		# Cleaning up because this pipeline may create thousands of files, depending 
 		# on how large the data set is.
-		# rm ${aligned_sam}* ${tmp_bam}* ${final_bam}* $fq1 $fq2
+		if [ "$clean_tmp_files" = true ] ; then
+			rm ${aligned_sam}* ${tmp_bam}* ${final_bam}* $fq1 $fq2
+		fi
 	done
 done < $bam_list
 
@@ -188,8 +197,14 @@ done < $bam_list
 #####################################
 for repeat_num in $(seq $min_repeat 1 $max_repeat)
 do
+
+	# If this gvcf_list does not exist, skip
+	if [ ! -f "${gvcf_list[$repeat_num]}" ]; then
+		continue
+	fi
+
 	ploidy=$(( 2 * $repeat_num ))
-	comb_gvcf_file=camo_gvcfs/ploidy_${ploidy}/${first_sample}_to_${last_sample}.g.vcf
+	comb_gvcf_file=camo_gvcfs/ploidy_${ploidy}/samples_${first_sample}_through_${last_sample}.g.vcf
 	time $GATK CombineGVCFs \
 		-R $ref \
 		-O $comb_gvcf_file \
@@ -199,5 +214,7 @@ done
 
 # Cleaning up because this pipeline may create thousands of files, depending 
 # on how large the data set is.
-# rm *.vcf*
+if [ "$clean_tmp_files" = true ] ; then
+	rm *.vcf*
+fi
 echo "COMMAND(`date`): DONE."
