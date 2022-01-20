@@ -1,6 +1,6 @@
-process step_00_GET_BAMS {
+process REALIGN_BAMS {
 	
-	label 'step_00'
+	label 'realign_bams'
 
 	input:
 		path(cram)

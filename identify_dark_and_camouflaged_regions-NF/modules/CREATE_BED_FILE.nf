@@ -1,8 +1,8 @@
-process step_05_CREATE_BED_FILE {
+process CREATE_BED_FILE {
 	
-	publishDir '/mnt/gpfs3_amd/condo/mteb223/rescue_camo_variants/nextflow/results/step_05', mode: 'copy'
+	publishDir "${projectDir}/../results/create_bed_file", mode: 'copy'
 
-	label 'step_05'
+	label 'create_bed_file'
 
 	input:
 		path(low_depth)

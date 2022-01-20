@@ -1,9 +1,9 @@
-process step_02_COMBINE_DRF_OUTPUT {
+process COMBINE_DRF_OUTPUT {
 	
-	label 'step_02'
+	label 'combine_drf_output'
 
 	input:
-		file(low_mapq_bed)
+		file(low_mapq_bed_list)
 		val(result_prefix)
 
 	output:
@@ -12,8 +12,8 @@ process step_02_COMBINE_DRF_OUTPUT {
 
 	script:
 	"""
-	echo $low_mapq_bed
+	echo $low_mapq_bed_list
 	echo $result_prefix
-	bash combine_DRF.sh '${low_mapq_bed}' $result_prefix
+	bash combine_DRF.sh '${low_mapq_bed_list}' $result_prefix
 	"""
 }

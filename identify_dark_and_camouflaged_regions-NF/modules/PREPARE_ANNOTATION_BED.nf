@@ -1,4 +1,4 @@
-process step_04_PREPARE_ANNOTATION_BED {
+process PREPARE_ANNOTATION_BED {
 	
 	label 'local'
 
@@ -11,6 +11,5 @@ process step_04_PREPARE_ANNOTATION_BED {
 	script:
 		"""
 		bash create_annotation_bed.sh ${annotation_bed}
-
 		"""
 }

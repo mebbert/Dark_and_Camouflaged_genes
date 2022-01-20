@@ -1,6 +1,6 @@
-process step_01_RUN_DRF {
+process RUN_DRF {
 	
-	label 'step_01'
+	label 'run_drf'
 
 	input:
 		path(bam)
