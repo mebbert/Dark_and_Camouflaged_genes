@@ -19,8 +19,8 @@ params.ref_index_bwt="${projectDir}/../sequencing_resources/references/Ensembl/h
 //params.ref_index_sa="${projectDir}/../sequencing_resources/references/Homo_sapiens.GRCh38_onlyChr22.fa.sa"
 //params.ref_index_bwt="${projectDir}/../sequencing_resources/references/Homo_sapiens.GRCh38_onlyChr22.fa.bwt"
 
-params.crams = "${projectDir}/../samples/ADSP/crams/*.cram"
-//params.crams = "${projectDir}/../test_data/ADSP_sample_crams/*"
+// params.crams = "${projectDir}/../samples/ADSP/crams/*.cram"
+params.crams = "${projectDir}/test_data/ADSP_sample_crams/*"
 params.ref_tag = 'hg38'
 params.gff = "${projectDir}/../sequencing_resources/annotations/Ensembl/hg38_release_93/Homo_sapiens.GRCh38.93.gff3"
 params.threads = 16
@@ -65,7 +65,7 @@ ref_tag = params.ref_tag
 run_drf_jar = file("${projectDir}/bin/DarkRegionFinder.jar")
 threads = params.threads
 sequencer = params.sequencer
-results_dir = params.output_dir
+results_dir = params.results_dir
 
 
 workflow{
