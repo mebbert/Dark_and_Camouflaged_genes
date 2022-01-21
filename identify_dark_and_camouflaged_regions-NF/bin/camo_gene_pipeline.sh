@@ -200,13 +200,19 @@ if ! bedtools intersect \
 fi
 
 ## Take mapq_file and create a blat query sequence list
+#
+# NOTE: Somewhere between the bedtools version we originally
+# used (v 2.26) and the current version (v 2.30), bedtools changed
+# the behavior for `-name` to include the name from the .bed file
+# and the coordinates. This feature is useful, but not exactly 
+# backwards compatible. We now need to specify `-nameOnly`.
 mkdir -p "query"
 if ! cat $mapq_annotations | \
 	grep -vE "^#" | \
 	bedtools getfasta \
 		-fi $GENOME \
 		-bed - \
-		-name \
+		-nameOnly \
 		-fo $query; then
 	echo "ERROR: `date` bedtools getfasta failed for $mapq_annotations"
 	exit 1

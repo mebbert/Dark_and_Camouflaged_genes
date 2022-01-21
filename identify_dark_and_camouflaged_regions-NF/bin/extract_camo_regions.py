@@ -81,13 +81,10 @@ def main(low_mapq_annos, blat_results_file, realign_file, align_to_file, camo_be
     blat_results.close()
 
     #modules = mapping.DFS()
-    print(mapping)
     camo_region_realign = open(realign_file, 'w')
     camo_region_alignto = open(align_to_file, 'w')
     nodes = list(mapping.nodes.keys())
     sorted(nodes, key = lambda region_id : len(mapping.nodes[region_id]))
-    print(nodes)
-    print(regions)
     masked = defaultdict(int)
     for region_id in nodes:
         if masked[region_id] == 0:
