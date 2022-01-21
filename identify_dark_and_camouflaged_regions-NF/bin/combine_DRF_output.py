@@ -52,7 +52,7 @@ def main(low_mapq_file_list, combined_low_depth_out_file, combined_low_mapq_out_
 
             # The number of reads with a MAPQ less than or equal to the defined '--mapq_threshold'
             # when DRF was run. The recommended GATK threshold is < 10, and is what we use as the 
-            # default for our pipeline (except DRF uses <=, so we use 9 as the input).
+            # default for our pipeline (except DRF uses '<=', so we use 9 as the input).
             nMapQBelowThresh_total = int(toks[3])
             depth_total = int(toks[4])
             for bed in beds_to_combine[1:]:

@@ -17,11 +17,11 @@ process CREATE_BED_FILE {
 		path(annotation_bed)
 		val(sequencer)
 		val(ref_tag)
-		val(threads)
-		val(output_dir)
+		// val(threads)
 
 	output:
-		path 'illuminaRL100.hg38*' 
+		// path 'illuminaRL100.hg38*' 
+		path "${sequencer}.${ref_tag}*' 
 
 	script:
 	"""
@@ -32,7 +32,6 @@ process CREATE_BED_FILE {
 		-a ${annotation_bed} \
 		-s ${sequencer} \
 		-v ${ref_tag} \
-		-t ${threads} \
-		-r ${output_dir}
+		-t $task.cpus \
 	"""
 }

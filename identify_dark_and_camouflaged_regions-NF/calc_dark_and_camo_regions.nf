@@ -76,5 +76,8 @@ workflow{
 	COMBINE_DRF_OUTPUT(RUN_DRF.out.low_mapq_bed.collect(), params.prefix)
 //	step_03_CALC_BAM_METRIC()
 	PREPARE_ANNOTATION_BED(params.gff)
-	CREATE_BED_FILE(COMBINE_DRF_OUTPUT.out.low_depth_out, COMBINE_DRF_OUTPUT.out.low_mapq_out, ref, ref_index, PREPARE_ANNOTATION_BED.out.prepped_anno_bed, sequencer, ref_tag, threads, results_dir)
+	CREATE_BED_FILE(COMBINE_DRF_OUTPUT.out.low_depth_out,
+                     COMBINE_DRF_OUTPUT.out.low_mapq_out, ref, ref_index,
+                     PREPARE_ANNOTATION_BED.out.prepped_anno_bed, sequencer,
+                     ref_tag)
 }

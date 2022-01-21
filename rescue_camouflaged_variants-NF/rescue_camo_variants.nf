@@ -54,7 +54,9 @@ params.ref_fasta = "${projectDir}/../references/GRCh38_no_alt_plus_hs38d1/GCA_00
 params.masked_ref_fasta = "${projectDir}/results/MASK_GENOME/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.fa"
 
 /*
- * TODO: 
+ * A 'tag' to describe the reference genome. This is used for naming output
+ * in the NextFlow process that identifies false positives (a.k.a.
+ * reference-based artifacts).
  */
 params.ref_tag = 'NCBI_GRCh38_no_alt_plus_hs38d1_analysis_set'
 
@@ -71,6 +73,16 @@ params.ref_tag = 'NCBI_GRCh38_no_alt_plus_hs38d1_analysis_set'
  * genomes as the extraction_bed.
  */
 params.gatk_bed = "${projectDir}/test_data/CR1-GATK-1KG_ref.bed"
+
+/*
+ * Path to the 'align_to' .bed file. This is used to focus on just the camoflaged
+ * regions in the NextFlow process that identifies false-positive variants.
+ * This .bed file comes from the `CREATE_BED_FILE` process in the
+ * `Identify Dark and Camouflaged Regions` NextFlow workflow. This .bed file
+ * must be specific to the reference genome being used in the `ref_fasta`
+ * argument.
+ */
+params.align_to_bed = "${projectDir}/test_data/illuminaRL100.hg38.camo.align_to.sorted.bed"
 
 /*
  *
@@ -143,6 +155,6 @@ workflow{
 
     RESCUE_CAMO_VARS_WF(bam_path, extraction_bed, ref_fasta, masked_ref_fasta,
                         gatk_bed, n_samples_per_batch, max_repeats_to_rescue,
-                        camo_annotations, ref_tag)
+                        camo_annotations, align_to_bed, ref_tag)
 }
 

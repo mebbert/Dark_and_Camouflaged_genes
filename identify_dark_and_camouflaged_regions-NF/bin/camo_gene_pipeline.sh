@@ -60,10 +60,10 @@ then
 	usage
 fi
 
-if [[ -z $RESULT_DIR ]]
-then
-	RESULT_DIR=${GVERS}/${SEQUENCER}
-fi
+# if [[ -z $RESULT_DIR ]]
+# then
+# 	RESULT_DIR=${GVERS}/${SEQUENCER}
+# fi
 
 # TMP_DIR="tmp/${SEQUENCER}.${GVERS}/"
 # mkdir -p $TMP_DIR
@@ -109,30 +109,49 @@ gatk_bed="${SEQUENCER}.${GVERS}.camo.GATK.bed"
 mapq_gene_bodies="low_mapq_gene_bodies.bed"
 mapq_not_camo="${SEQUENCER}.${GVERS}.low_mapq.NOT_camo.bed"
 
-# Merge coordinates for depth bed, removing regions that are less than 20bp long
-if ! bedtools merge -d 20 -c 5 -o mean,median -i $DEPTH_BED | \
-	remove_unassembled_contigs.py | \
-	awk '{ if($3 - $2 > 20) print $0}' \
-	> $depth_merged; then
 
-	echo "`date` bedtools merge failed for $DEPTH_BED"
-	exit 1
-fi
+# These first two processes can run simultaneously.
+
+# Merge coordinates for depth bed, removing regions that are less than 20bp long
+time bedtools merge -d 20 -c 5 -o mean,median -i $DEPTH_BED | \
+	python remove_unassembled_contigs.py | \
+	awk '{ if($3 - $2 > 20) print $0}' \
+	> $depth_merged & 
+
+	# Save PID for this background job to make sure
+	# it exits successfully.
+	depth_pid=$!
 
 # Merge coordinates for mapq bed, removing regions that are less than 20bp long
-if ! bedtools merge -d 20 -c 5 -o mean,median -i $MAPQ_BED | \
-	remove_unassembled_contigs.py | \
+time bedtools merge -d 20 -c 5 -o mean,median -i $MAPQ_BED | \
+	python remove_unassembled_contigs.py | \
 	awk '{ if($3 - $2 > 20) print $0}' \
-	> $mapq_merged; then
+	> $mapq_merged &
 
-	echo "`date` bedtools merge failed for $MAPQ_BED"
+	# Save PID for this background job to make sure
+	# it exits successfully.
+	mapq_pid=$!
+
+# Wait for previous processes to finish and check exit status
+had_failure=false
+if ! wait $depth_pid; then
+	echo "ERROR: `date` bedtools merge failed for $DEPTH_BED"
+	$had_failure=true
+fi
+
+if ! wait $mapq_pid; then
+	echo "ERROR: `date` bedtools merge failed for $MAPQ_BED"
+	$had_failure=true
+fi
+
+if $had_failure; then
 	exit 1
 fi
 
 # Printing the lengths of each mapq region to a file
 echo -e "region_id\tchrom\tlength" >> $mapq_lengths
 if ! awk '{n +=1; print n,$1,($3 - $2)}' $mapq_merged >> $mapq_lengths; then
-	echo "`date` awk failed for $mapq_merged"
+	echo "ERROR: `date` awk failed for $mapq_merged"
 	exit 1
 fi
 
@@ -140,7 +159,7 @@ if ! cat $mapq_merged $depth_merged | \
 	bedtools sort -i - -faidx $faidx | \
 	bedtools merge -i - \
 	> $dark_merged; then
-	echo "`date` bedtools sort failed for $faidx"
+	echo "ERROR: `date` bedtools sort/merge failed for $mapq_merged and $depth_merged"
 	exit 1
 fi
 
@@ -152,11 +171,11 @@ if ! bedtools intersect \
 	annotate_regions.py \
 		$percent_dark $biotype_dark $coding_dark "dark" \
 		> $dark_annotations; then
-	echo "`date` bedtools intersect failed for $ANNOTATION and $dark_merged"
+	echo "ERROR: `date` bedtools intersect or annotate_regions.py failed for $ANNOTATION and $dark_merged"
 	exit 1
 fi
 
-## INtersect the low depth dark regions with gene annotation bed
+## Intersect the low depth dark regions with gene annotation bed
 if ! bedtools intersect \
 	-a $ANNOTATION \
 	-b $depth_merged \
@@ -164,7 +183,7 @@ if ! bedtools intersect \
 	annotate_regions.py \
 		$percent_depth $biotype_depth $coding_depth "dark by depth" \
 		> $depth_annotations; then
-	echo "`date` bedtools intersect failed for $ANNOTATION and $depth_merged"
+	echo "ERROR: `date` bedtools intersect or annotate_regions.py failed for $ANNOTATION and $depth_merged"
 	exit 1
 fi
 
@@ -176,7 +195,7 @@ if ! bedtools intersect \
 	annotate_regions.py \
 		$percent_mapq $biotype_mapq $coding_mapq "dark by MAPQ" \
 		> $mapq_annotations; then
-	echo "`date` bedtools intersect failed for $ANNOTATION and $mapq_merged"
+	echo "ERROR: `date` bedtools intersect or annotate_regions.py failed for $ANNOTATION and $mapq_merged"
 	exit 1
 fi
 
@@ -189,7 +208,7 @@ if ! cat $mapq_annotations | \
 		-bed - \
 		-name \
 		-fo $query; then
-	echo "`date` bedtools getfasta failed for $mapq_annotations"
+	echo "ERROR: `date` bedtools getfasta failed for $mapq_annotations"
 	exit 1
 fi
 
@@ -203,36 +222,73 @@ fi
 rm -rf "./blat_result"
 mkdir -p "./blat_result"
 mkdir -p "./blat_log"
+pid_array=()
 for i in $(seq 1 $stepSize $nLines)
 do
 	sed "$((i)),$((i + $stepSize - 1))!d" $query > ${query}.${i}
-	if ! blat $GENOME ${query}.${i} \
+	blat $GENOME ${query}.${i} \
 			-t=dna \
 			-q=dna \
 			-minIdentity=95 \
 			-noHead \
 			${blat_result}.${i} \
-			&> ${blat_log}.${i} &; then
-	echo "`date` blat failed"
-	exit 1
-fi
+			&> ${blat_log}.${i} &
+	
+	# Save PID for each submitted background process. "$!" always
+	# holds the PID for most recently submitted process.
+	pid_array+=($!)
+	# echo "\$!: $!"
 
 done
-wait
+# wait
+
+
+# Wait until all submitted processes are completed.
+keep_waiting=true
+while $keep_waiting
+do
+	keep_waiting=false
+	for pid in "${pid_array[@]}"
+	do
+		if ps -p $pid > /dev/null; then
+
+			# At least this process is still running, so keep waiting
+			keep_waiting=true
+			echo "Waiting on blat (PID: $pid)..."
+		fi
+	done
+
+	# sleep for 10 seconds
+	sleep 10
+done
+
+# Check exit status for each PID and exit if any failed
+had_failure=false
+for pid in "${pid_array[@]}"
+do
+	if ! wait $pid; then
+		$had_failure=true
+		echo "ERROR: `date` blat failed (PID: $pid)"
+	fi
+done
+
+if $had_failure; then
+	exit 1
+fi
 
 ## Combine the blat results together and format them
 ## into a bed file where score shows the sequence identity,
 ## removing blat hits that are less than 98% sequence identity
 echo "`date` blatting complete: combining blat output"
 if ! cat ${blat_result}.* > $blat_result; then
-	echo "`date` cat failed for ${blat_result}.*"
+	echo "ERROR: `date` cat failed for ${blat_result}.*"
 	exit 1
 fi
 
 if ! score_blat_output.awk \
 	$blat_result \
 	> $blat_bed; then
-	echo "`date` score_blat_output.awk failed for ${blat_result}"
+	echo "ERROR: `date` score_blat_output.awk failed for ${blat_result}"
 	exit 1
 fi
 
@@ -240,7 +296,7 @@ fi
 if ! awk -v "OFS=\t" '$1 !~ "^#" { print $7,$8,$9,$4 }' \
 	$mapq_annotations \
 	> $mapq_gene_bodies; then
-	echo "`date` score_blat_output.awk failed for ${blat_result}"
+	echo "ERROR: `date` score_blat_output.awk failed for ${blat_result}"
 	exit 1
 fi
 
@@ -251,7 +307,7 @@ if ! bedtools intersect \
 	-loj | \
 	awk '$6 != "."' \
 	> $mapped_blat_results; then
-	echo "`date` bedtools intersect failed for ${blat_bed} and $mapq_gene_bodies"
+	echo "ERROR: `date` bedtools intersect failed for ${blat_bed} and $mapq_gene_bodies"
 	exit 1
 fi
 
@@ -265,7 +321,7 @@ if ! extract_camo_regions.py \
 	$realign \
 	$align_to \
 	$camo_bed; then
-	echo "`date` extract_camo_regions.py failed."
+	echo "ERROR: `date` extract_camo_regions.py failed."
 	exit 1
 fi
 
@@ -277,15 +333,15 @@ echo "`date` sorting camo bed files"
 if ! bedtools sort -i $camo_bed -faidx $faidx | \
 	bedtools merge -i - | \
 	bedtools intersect -a - -b $mapq_merged > $camo_sorted; then
-	echo "`date` extract_camo_regions.py failed."
+	echo "ERROR: `date` bedtools sort/merge/intersect failed for $camo_bed."
 	exit 1
 fi
 if ! bedtools sort -i $align_to -faidx $faidx > $alignto_sorted; then
-	echo "`date` extract_camo_regions.py failed."
+	echo "ERROR: `date` bedtools sort failed for $align_to."
 	exit 1
 fi
 if ! bedtools sort -i $realign  -faidx $faidx > $realign_sorted; then
-	echo "`date` extract_camo_regions.py failed."
+	echo "ERROR: `date` bedtools sort failed for $realign."
 	exit 1
 fi
 
@@ -297,7 +353,7 @@ if ! bedtools intersect \
 	annotate_regions.py \
 		$percent_camo $biotype_camo $coding_camo "camo" \
 		> $camo_annotations; then
-	echo "`date` bedtools intersect failed for $ANNOTATION and $camo_sorted."
+	echo "ERROR: `date` bedtools intersect failed for $ANNOTATION and $camo_sorted."
 	exit 1
 fi
 
@@ -310,7 +366,7 @@ if ! grep -vE "^#" $camo_annotations | \
 		-a $alignto_sorted \
 		-b -\
 	> $gatk_bed; then
-	echo "`date` bedtools intersect failed $camo_annotations and $alignto_sorted."
+	echo "ERROR: `date` bedtools intersect failed $camo_annotations and $alignto_sorted."
 	exit 1
 fi
 		
@@ -319,27 +375,28 @@ if ! bedtools subtract \
 	-a $mapq_merged \
 	-b $camo_sorted \
 	> $mapq_not_camo; then
-	echo "`date` bedtools subtract failed for $mapq_merged and $camo_sorted."
+	echo "ERROR: `date` bedtools subtract failed for $mapq_merged and $camo_sorted."
 	exit 1
 fi
 
-mkdir -p $RESULT_DIR
-cp $mapq_merged $depth_merged $dark_merged \
-	$percent_dark $percent_depth $percent_mapq \
-	$biotype_dark $biotype_mapq $biotype_depth \
-	$dark_annotations $mapq_annotations $depth_annotations \
-	$alignto_sorted $realign_sorted $mapq_not_camo \
-	$camo_annotations $percent_camo $biotype_camo \
-	$coding_dark $coding_mapq $coding_depth $coding_camo \
-	$gatk_bed \
-	$RESULT_DIR
+# mkdir -p $RESULT_DIR
+# cp $mapq_merged $depth_merged $dark_merged \
+# 	$percent_dark $percent_depth $percent_mapq \
+# 	$biotype_dark $biotype_mapq $biotype_depth \
+# 	$dark_annotations $mapq_annotations $depth_annotations \
+# 	$alignto_sorted $realign_sorted $mapq_not_camo \
+# 	$camo_annotations $percent_camo $biotype_camo \
+# 	$coding_dark $coding_mapq $coding_depth $coding_camo \
+# 	$gatk_bed \
+# 	$RESULT_DIR
 
 ###################
 #### CLEAN UP #####
 ###################
 
-cd $HOME #move to safe location
-rm -rfv $TMP_DIR
+# cd $HOME #move to safe location
+# rm -rfv $TMP_DIR
 echo "---"
 
 echo "`date` DONE"
+

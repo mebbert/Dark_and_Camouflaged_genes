@@ -17,6 +17,7 @@ workflow RESCUE_CAMO_VARS_WF {
         n_samples_per_batch
         max_repeats_to_rescue
         camo_annotations
+        align_to_bed
         ref_tag
 
     main:
@@ -68,7 +69,7 @@ workflow RESCUE_CAMO_VARS_WF {
         /*
          * Identify false positives (i.e., reference-based artifiacts).
          */
-        IDENTIFY_FALSE_POSITIVES_PROC(camo_annotations, ref_fasta, ref_tag)
+        IDENTIFY_FALSE_POSITIVES_PROC(camo_annotations, align_to_bed, ref_fasta, ref_tag)
 }
 
 
@@ -283,6 +284,6 @@ process IDENTIFY_FALSE_POSITIVES_PROC {
     """
     artifacts_bed="reference_based_artifacts.${ref_name}.bed"
 
-    bash get_false_positives.sh $camo_annotations $align_to_bed $ref_fasta \$artifacts_bed $task.cpus
+    bash identify_false_positives.sh $camo_annotations $align_to_bed $ref_fasta \$artifacts_bed $task.cpus
     """
 }
