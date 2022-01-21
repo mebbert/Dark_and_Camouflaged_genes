@@ -38,12 +38,25 @@ params.bam_path = "${projectDir}/test_data/UKY_ADSP_crams"
 params.extraction_bed = "${projectDir}/test_data/CR1-extraction-1KG_ref.bed"
 
 /*
+ * The original and UNMASKED reference. This will be used to identify false-
+ * positive variants in the rescued variant VCF files. These false positives
+ * are the result of 'reference-based artifacts', which we describe in the
+ * paper and in notes for the respective NextFlow process.
+ */
+params.ref_fasta = "${projectDir}/../references/GRCh38_no_alt_plus_hs38d1/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna"
+
+/*
  * The MASKED reference to be *ALIGNED TO*. If the reference provided here has
  * not been masked for camouflaged regions, we cannot rescue camouflaged
  * variants. This reference must be prepared using our pipeline to identify
  * camouflaged regions.
  */
 params.masked_ref_fasta = "${projectDir}/results/MASK_GENOME/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.fa"
+
+/*
+ * TODO: 
+ */
+params.ref_tag = 'NCBI_GRCh38_no_alt_plus_hs38d1_analysis_set'
 
 /*
  * Path to the .bed file that GATK will use to call variants. This MUST
@@ -58,6 +71,11 @@ params.masked_ref_fasta = "${projectDir}/results/MASK_GENOME/GCA_000001405.15_GR
  * genomes as the extraction_bed.
  */
 params.gatk_bed = "${projectDir}/test_data/CR1-GATK-1KG_ref.bed"
+
+/*
+ *
+ */
+params.camo_annotations = "${projectDir}/test_data/illuminaRL100.hg38.camo.align_to.sorted.bed"
 
 /*
  * Define the number of samples to run in a single rescue batch. This can
@@ -86,11 +104,6 @@ params.max_repeats_to_rescue = 5
  */
 params.clean_tmp_files = false 
 
-/*
- * TODO: What was this for?
- */
-params.ref_tag = 'hg38'
-
 
 // TODO: What's this for?
 log.info """\
@@ -113,10 +126,12 @@ include {RESCUE_CAMO_VARS_WF} from './modules/RESCUE_CAMO_VARS_PROCS.nf'
  */
 bam_path = params.bam_path
 extraction_bed = file(params.extraction_bed)
+ref_fasta = params.ref_fasta
 masked_ref_fasta = params.masked_ref_fasta
 gatk_bed = file(params.gatk_bed)
 n_samples_per_batch = params.n_samples_per_batch
 max_repeats_to_rescue = params.max_repeats_to_rescue
+ref_tag = params.ref_tag
 
 workflow{
 /*
@@ -126,7 +141,8 @@ workflow{
             'GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna')
 */
 
-    RESCUE_CAMO_VARS_WF(bam_path, extraction_bed, masked_ref_fasta, gatk_bed, 
-                         n_samples_per_batch, max_repeats_to_rescue)
+    RESCUE_CAMO_VARS_WF(bam_path, extraction_bed, ref_fasta, masked_ref_fasta,
+                        gatk_bed, n_samples_per_batch, max_repeats_to_rescue,
+                        camo_annotations, ref_tag)
 }
 

@@ -11,14 +11,24 @@ workflow RESCUE_CAMO_VARS_WF {
     take:
         bam_path
         extraction_bed
+        ref_fasta
         masked_ref_fasta
         gatk_bed
         n_samples_per_batch
         max_repeats_to_rescue
+        camo_annotations
+        ref_tag
 
     main:
 
+        /*
+         * Prep batch files for RESCUE_CAMO_VARS_PROC
+         */
         PREP_BATCH_FILES_PROC(bam_path, n_samples_per_batch)
+
+        /*
+         * Rescue camo vars
+         */
         RESCUE_CAMO_VARS_PROC(
                                 extraction_bed,
                                 masked_ref_fasta,
@@ -27,51 +37,38 @@ workflow RESCUE_CAMO_VARS_WF {
                                 max_repeats_to_rescue
                               )
 
-    /*
-     * Prepare input parameters for COMBINE_AND_GENOTYPE
-     */
-    Channel.fromPath( gatk_bed ) \
-        | splitCsv(sep: '\t') \
-        | map { line ->
-            tuple( line[4].toInteger(), "${line[0]}:${line[1]}-${line[2]}" )
-        } \
-        | set { regions }
+        /*
+         * Prepare input parameters for COMBINE_AND_GENOTYPE and run. Most of this 
+         * `NextFlow/Groovy` wizardry is courtesy of @Steve on `StackOverflow`
+         * https://stackoverflow.com/questions/70718115/the-most-nextflow-like-dsl2-way-to-incorporate-a-former-bash-scheduler-submiss/70735565#70735565
+         */
+        Channel.fromPath( gatk_bed ) \
+            | splitCsv(sep: '\t') \
+            | map { line ->
+                tuple( line[4].toInteger(), "${line[0]}:${line[1]}-${line[2]}" )
+            } \
+            | set { regions }
 
-//     test = ""
-// 
-//     RESCUE_CAMO_VARS_PROC.out.camo_gvcf_parent_dir.concatenate() // /**/*.g.vcf"
-//     RESCUE_CAMO_VARS_PROC.out.camo_gvcf_parent_dir.subscribe{ test += it.name } // /**/*.g.vcf"
-// 
-//     dfile = file('debug.txt')
-//     dfile.append("GVCF parent dir: \n")
-//     dfile.append(RESCUE_CAMO_VARS_PROC.out.camo_gvcf_parent_dir.view().toString() + "\n")
-//     dfile.append(params.GVCF_DIRECTORY.toString() + "\n")
-//     dfile.append("Test: " + test + "\n")
-//     dfile.append(test)
-    
-    /*
-     * TODO: Figure out how to access the emitted path to the .gvcfs
-     * from RESCUE_CAMO_VARS_PROC so that we don't have to rely on the
-     * saved results and hard code the directory.
-     */
-    GVCF_dir = file("${params.results_dir}/RESCUE_CAMO_VARS")
-    c_and_g_input_params = Channel.fromPath( "${GVCF_dir}/**/*.g.vcf" ) \
-         .map { tuple( GVCF_dir.relativize(it).subpath(1,2).name, it ) }
-         .groupTuple()
-         .map { dirname, gvcf_files ->
-             def ploidy = dirname.replaceFirst(/^.*_/, "").toInteger()
-             def repeat = ploidy.intdiv(2)
-             def ref_fasta = file( masked_ref_fasta )
-             tuple( repeat, dirname, ref_fasta, gvcf_files )
-         }
-         .combine( regions, by: 0 )
-         .map { repeat, dirname, ref_fasta, gvcf_files, region ->
-             tuple( dirname, region, ref_fasta, gvcf_files )
-         }
-         
-    // c_and_g_input_params.view()
-    // COMBINE_AND_GENOTYPE_PROC(c_and_g_input_params, RESCUE_CAMO_VARS_PROC.out.rescue_complete)
-    COMBINE_AND_GENOTYPE_PROC(c_and_g_input_params)
+        RESCUE_CAMO_VARS_PROC.out.camo_gvcfs.flatten()
+             .map { tuple( it.subpath(it.getNameCount() - 2, it.getNameCount() - 1).name, it )
+             }
+             .groupTuple()
+             .map { dirname, gvcf_files ->
+                 def ploidy = dirname.replaceFirst(/^.*_/, "").toInteger()
+                 def repeat = ploidy.intdiv(2)
+                 def ref_fasta = file( masked_ref_fasta )
+                 tuple( repeat, dirname, ref_fasta, gvcf_files )
+             }
+             .combine( regions, by: 0 )
+             .map { repeat, dirname, ref_fasta, gvcf_files, region ->
+                 tuple( dirname, region, ref_fasta, gvcf_files )
+             } | COMBINE_AND_GENOTYPE_PROC
+
+
+        /*
+         * Identify false positives (i.e., reference-based artifiacts).
+         */
+        IDENTIFY_FALSE_POSITIVES_PROC(camo_annotations, ref_fasta, ref_tag)
 }
 
 
@@ -121,10 +118,19 @@ process PREP_BATCH_FILES_PROC {
 
 
 /*
- * The process to rescue camouflaged variants. Will extract reads for each sample 
- * based on the `extraction.bed`, align them to the masked reference, call
- * variants using GATK HaplotypeCaller, and then combine all samples in this
- * batch (defined by $bam_set) into a single .gvcf file.
+ * The process to rescue camouflaged variants. This process performs the
+ * following steps (for each batch of samples):
+ *   1. Extract low MAPQ reads (MAPQ < 10) for each sample based on the
+ *      `extraction.bed`
+ *   2. Align extracted reads to the masked reference created in MASK_GENOME
+ *   3. Call variants using GATK HaplotypeCaller with the GATK .bed file
+ *   4. Combine all samples in this batch (defined by $bam_set) and for each
+ *      ploidy into a single .gvcf file.
+ *
+ * This is done seperately for each repeat number, adjusting `ploidy` for GATK
+ * HaplotypeCaller for the specific region being called (i.e. regions with
+ * repeat number 2 uses ploidy of 4). All samples get combined into ploidy-
+ * specific GVCFs for each ploidy tested.
  */
 process RESCUE_CAMO_VARS_PROC {
 
@@ -144,8 +150,12 @@ process RESCUE_CAMO_VARS_PROC {
         val(max_repeats_to_rescue)
 
  	output:
- 		path 'camo_batch_gvcfs/', emit: camo_gvcf_parent_dir
-        val 'complete', emit: rescue_complete
+        /*
+         * Emit the full path to all .gvcf files
+         */
+ 		// path 'camo_batch_gvcfs/', emit: camo_gvcfs
+ 		path 'camo_batch_gvcfs/**/*.g.vcf', emit: camo_gvcfs
+        // val 'complete', emit: rescue_complete
 
 	script:
 
@@ -161,7 +171,14 @@ process RESCUE_CAMO_VARS_PROC {
 
 
 /*
+ * The process to combine and genotype all samples for each ploidy .gvcf
+ * generated in `RESCUE_CAMO_VARS_PROC`. Combining all gVCFs across all camo
+ * regions for a large cohort (e.g., the ADSP) requires too much memory, so
+ * the job is parallelized by looking at each camo region, individually, and
+ * combine all samples and genotype them for just this single region.
  *
+ * In a later step, variants from all camo region VCFs are catted into a
+ * combined cohort VCF for a given ploidy across all samples.
  */
 process COMBINE_AND_GENOTYPE_PROC {
 
@@ -171,22 +188,17 @@ process COMBINE_AND_GENOTYPE_PROC {
 
     input:
 
-    /*
-     * Receiving as ref_fasta and gvcf_files as 'val' input so that NextFlow
-     * will not 'stage' the files in the working directory because it doesn't
-     * stage the index files with them. The other option would be to also receive
-     * the index files as paths so both are staged.
-     */
-    tuple val(ploidy_group), val(region_string), val(ref_fasta), val(gvcf_files)
+        /*
+         * Receiving as ref_fasta and gvcf_files as 'val' input so that NextFlow
+         * will not 'stage' the files in the working directory because it doesn't
+         * stage the index files with them. The other option would be to also receive
+         * the index files as paths so both are staged.
+         */
+        tuple val(ploidy_group), val(region_string), val(ref_fasta), val(gvcf_files)
 
-    /*
-     * Passing in this value from RESCUE_CAMO_VARS_PROC to signal that
-     * this process must wait for the rescue to complete.
-     */
-    // val(rescue_complete) 
 
     output:
-    tuple val(ploidy_group), val(region_string), path("full_cohort.combined.${region}.g.vcf")
+        tuple val(ploidy_group), val(region_string), path("full_cohort.combined.${region}.g.vcf")
 
     script:
 
@@ -198,7 +210,6 @@ process COMBINE_AND_GENOTYPE_PROC {
     def Xms = avail_mem >= 8 ? "-Xms${avail_mem.intdiv(2)}G" : ''
 
     """
-
     echo "Ploidy group: $ploidy_group"
     echo "Region: $region_string"
     echo "Ref: $ref_fasta"
@@ -212,22 +223,66 @@ process COMBINE_AND_GENOTYPE_PROC {
     ${gvcf_files.join('\n'+' '*4)}
     __EOF__
 
+    combined_region_gvcf="full_cohort.combined.${region}.g.vcf"
+    final_region_vcf="full_cohort.combined.${region}.vcf"
+    input_gvcf_list="${ploidy_group}.gvcf.list"
+
     gatk \\
         --java-options "${Xmx} ${Xms} -XX:+UseSerialGC" \\
         CombineGVCFs \\
         -R "${ref_fasta}" \\
         -L "${region_string}" \\
-        -O "full_cohort.combined.${region}.g.vcf" \\
-        -V "${ploidy_group}.gvcf.list"
+        -O \$combined_region_gvcf \\
+        -V \$input_gvcf_list
 
     gatk \\
         --java-options "${Xmx} ${Xms} -XX:+UseSerialGC" \\
         GenotypeGVCFs \\
         -R "${ref_fasta}" \\
         -L "${region_string}" \\
-        -O "full_cohort.combined.${region}.vcf" \\
-        -V "full_cohort.combined.${region}.g.vcf" \\
-        -A GenotypeSummaries
+        -A GenotypeSummaries \\
+        -O \$final_region_vcf \\
+        -V $combined_region_gvcf
     """
 }
 
+
+/*
+ * The process to identify false-positive variant calls in the rescued camo
+ * variants. These false-positives specifically originate from what we term
+ * "reference-based artifacts". These artifacts show up when when two regions
+ * in a given camo set are not 100% identical. Thus, when a read from one
+ * region is forced to align to the other, an artificial variant is called.
+ *
+ * This process creates a list of all possible reference-based artifacts by
+ * taking all camo CDS regions with repeat number ≤ 5 (i.e., ≤ 5 camo regions
+ * in the set) and blat them against the whole genome. Any DNA sequence from a
+ * hit with sequence identity ≥ 98% are locally realigned back to the query
+ * seqeunce using Bio.pairwise2. Any mismatches or gaps in the aligned sequence
+ * are converted into variant positions and output to a bed file that lists
+ * positions of reference-based-artifacts to be filtered from the VCF files.
+ *
+ * This only needs to be run once per reference genome.
+ */
+process IDENTIFY_FALSE_POSITIVES_PROC {
+
+    publishDir "${params.results_dir}/IDENTIFY_FALSE_POSITIVES"
+
+	label 'IDENIFY_FALSE_POSITIVES'
+
+    input:
+        path camo_annotations
+        path align_to_bed
+        val ref_fasta
+        val ref_name
+        
+    output:
+        path "reference_based_artifacts.${ref_name}.bed"
+
+    script:
+    """
+    artifacts_bed="reference_based_artifacts.${ref_name}.bed"
+
+    bash get_false_positives.sh $camo_annotations $align_to_bed $ref_fasta \$artifacts_bed $task.cpus
+    """
+}

@@ -3,6 +3,8 @@
 # Enable bash debugging to log all commands
 set -x
 
+echo "`date` Running camo_gene_pipeline.sh"
+
 function usage {
 	echo "usage: $ ./camo_gene_pipeline.sh [options...]"
 	echo "Parameters:"
@@ -108,63 +110,88 @@ mapq_gene_bodies="low_mapq_gene_bodies.bed"
 mapq_not_camo="${SEQUENCER}.${GVERS}.low_mapq.NOT_camo.bed"
 
 # Merge coordinates for depth bed, removing regions that are less than 20bp long
-bedtools merge -d 20 -c 5 -o mean,median -i $DEPTH_BED | \
+if ! bedtools merge -d 20 -c 5 -o mean,median -i $DEPTH_BED | \
 	remove_unassembled_contigs.py | \
 	awk '{ if($3 - $2 > 20) print $0}' \
-	> $depth_merged
+	> $depth_merged; then
+
+	echo "`date` bedtools merge failed for $DEPTH_BED"
+	exit 1
+fi
 
 # Merge coordinates for mapq bed, removing regions that are less than 20bp long
-bedtools merge -d 20 -c 5 -o mean,median -i $MAPQ_BED | \
+if ! bedtools merge -d 20 -c 5 -o mean,median -i $MAPQ_BED | \
 	remove_unassembled_contigs.py | \
 	awk '{ if($3 - $2 > 20) print $0}' \
-	> $mapq_merged
+	> $mapq_merged; then
+
+	echo "`date` bedtools merge failed for $MAPQ_BED"
+	exit 1
+fi
 
 # Printing the lengths of each mapq region to a file
 echo -e "region_id\tchrom\tlength" >> $mapq_lengths
-awk '{n +=1; print n,$1,($3 - $2)}' $mapq_merged >> $mapq_lengths
+if ! awk '{n +=1; print n,$1,($3 - $2)}' $mapq_merged >> $mapq_lengths; then
+	echo "`date` awk failed for $mapq_merged"
+	exit 1
+fi
 
-
-cat $mapq_merged $depth_merged | \
+if ! cat $mapq_merged $depth_merged | \
 	bedtools sort -i - -faidx $faidx | \
 	bedtools merge -i - \
-	> $dark_merged
+	> $dark_merged; then
+	echo "`date` bedtools sort failed for $faidx"
+	exit 1
+fi
 
 ## Intersect all dark regions with gene annotation bed
-bedtools intersect \
+if ! bedtools intersect \
 	-a $ANNOTATION \
 	-b $dark_merged \
 	-loj | \
 	annotate_regions.py \
 		$percent_dark $biotype_dark $coding_dark "dark" \
-		> $dark_annotations
+		> $dark_annotations; then
+	echo "`date` bedtools intersect failed for $ANNOTATION and $dark_merged"
+	exit 1
+fi
 
 ## INtersect the low depth dark regions with gene annotation bed
-bedtools intersect \
+if ! bedtools intersect \
 	-a $ANNOTATION \
 	-b $depth_merged \
 	-loj | \
 	annotate_regions.py \
 		$percent_depth $biotype_depth $coding_depth "dark by depth" \
-		> $depth_annotations
+		> $depth_annotations; then
+	echo "`date` bedtools intersect failed for $ANNOTATION and $depth_merged"
+	exit 1
+fi
 
 ## Intersect the low mapq regions with gene annotation bed
-bedtools intersect \
+if ! bedtools intersect \
 	-a $ANNOTATION \
 	-b $mapq_merged \
 	-loj | \
 	annotate_regions.py \
 		$percent_mapq $biotype_mapq $coding_mapq "dark by MAPQ" \
-		> $mapq_annotations
+		> $mapq_annotations; then
+	echo "`date` bedtools intersect failed for $ANNOTATION and $mapq_merged"
+	exit 1
+fi
 
 ## Take mapq_file and create a blat query sequence list
-mkdir -p "/query"
-cat $mapq_annotations | \
+mkdir -p "query"
+if ! cat $mapq_annotations | \
 	grep -vE "^#" | \
 	bedtools getfasta \
 		-fi $GENOME \
 		-bed - \
 		-name \
-		-fo $query
+		-fo $query; then
+	echo "`date` bedtools getfasta failed for $mapq_annotations"
+	exit 1
+fi
 
 nLines=$(wc -l $query | awk '{print $1}')
 stepSize=$(($nLines / $NUM_THREADS))
@@ -173,19 +200,23 @@ then
 	    stepSize=$(($stepSize + 1))
 fi
 
-rm -rf "/blat_result"
-mkdir -p "/blat_result"
-mkdir -p "/blat_log"
+rm -rf "./blat_result"
+mkdir -p "./blat_result"
+mkdir -p "./blat_log"
 for i in $(seq 1 $stepSize $nLines)
 do
 	sed "$((i)),$((i + $stepSize - 1))!d" $query > ${query}.${i}
-	blat $GENOME ${query}.${i} \
+	if ! blat $GENOME ${query}.${i} \
 			-t=dna \
 			-q=dna \
 			-minIdentity=95 \
 			-noHead \
 			${blat_result}.${i} \
-			&> ${blat_log}.${i} &
+			&> ${blat_log}.${i} &; then
+	echo "`date` blat failed"
+	exit 1
+fi
+
 done
 wait
 
@@ -193,71 +224,104 @@ wait
 ## into a bed file where score shows the sequence identity,
 ## removing blat hits that are less than 98% sequence identity
 echo "`date` blatting complete: combining blat output"
-cat ${blat_result}.* > $blat_result
+if ! cat ${blat_result}.* > $blat_result; then
+	echo "`date` cat failed for ${blat_result}.*"
+	exit 1
+fi
 
-score_blat_output.awk \
+if ! score_blat_output.awk \
 	$blat_result \
-	> $blat_bed
+	> $blat_bed; then
+	echo "`date` score_blat_output.awk failed for ${blat_result}"
+	exit 1
+fi
 
-echo "`date` awk 'BEGIN{OFS="\t"}{ print $7,$8,$9,$4 }' $mapq_annotations > $mapq_gene_bodies"
-awk -v "OFS=\t" '$1 !~ "^#" { print $7,$8,$9,$4 }' \
+# echo "`date` awk 'BEGIN{OFS="\t"}{ print $7,$8,$9,$4 }' $mapq_annotations > $mapq_gene_bodies"
+if ! awk -v "OFS=\t" '$1 !~ "^#" { print $7,$8,$9,$4 }' \
 	$mapq_annotations \
-	> $mapq_gene_bodies
+	> $mapq_gene_bodies; then
+	echo "`date` score_blat_output.awk failed for ${blat_result}"
+	exit 1
+fi
 
 ## Intersect the blat output to original list of low_mapq regions
-bedtools intersect \
+if ! bedtools intersect \
 	-a $blat_bed \
 	-b $mapq_gene_bodies \
 	-loj | \
 	awk '$6 != "."' \
-	> $mapped_blat_results
+	> $mapped_blat_results; then
+	echo "`date` bedtools intersect failed for ${blat_bed} and $mapq_gene_bodies"
+	exit 1
+fi
 
 ## From the scored intersected blat output, calculates the maps
 ## of which camo regions align to which other ones, and creates camo sets
 # lists all the regions in  acamo set in the realign file and selects the one region form that set that we 
 ## will use to align to (written in the align_to file, all other regions in set will be masked)
-extract_camo_regions.py \
+if ! extract_camo_regions.py \
 	$mapq_annotations \
 	$mapped_blat_results \
 	$realign \
 	$align_to \
-	$camo_bed
+	$camo_bed; then
+	echo "`date` extract_camo_regions.py failed."
+	exit 1
+fi
 
 echo "`date` sorting camo bed files"
 
 #extract_camo_regions prints out whole camo gene bodies,
 #also same gene bodies may be printed twice, so first merge then
 #intersect with merged_mapq to get just the Camo Region boundaries
-bedtools sort -i $camo_bed -faidx $faidx | \
+if ! bedtools sort -i $camo_bed -faidx $faidx | \
 	bedtools merge -i - | \
-	bedtools intersect -a - -b $mapq_merged > $camo_sorted
-bedtools sort -i $align_to -faidx $faidx > $alignto_sorted
-bedtools sort -i $realign  -faidx $faidx > $realign_sorted
+	bedtools intersect -a - -b $mapq_merged > $camo_sorted; then
+	echo "`date` extract_camo_regions.py failed."
+	exit 1
+fi
+if ! bedtools sort -i $align_to -faidx $faidx > $alignto_sorted; then
+	echo "`date` extract_camo_regions.py failed."
+	exit 1
+fi
+if ! bedtools sort -i $realign  -faidx $faidx > $realign_sorted; then
+	echo "`date` extract_camo_regions.py failed."
+	exit 1
+fi
 
 ## Create Camo Annotation table (intersecting camo regions to gene annotation bed)
-bedtools intersect \
+if ! bedtools intersect \
 	-a $ANNOTATION \
 	-b $camo_sorted \
 	-loj | \
 	annotate_regions.py \
 		$percent_camo $biotype_camo $coding_camo "camo" \
-		> $camo_annotations
+		> $camo_annotations; then
+	echo "`date` bedtools intersect failed for $ANNOTATION and $camo_sorted."
+	exit 1
+fi
 
 ## Create GATK bed: bed that will give regions were camo variants will be called
 ## The GATK bed is the CDS align to regions that are exclusively camo,
 ## The normal align_to lists the whole genebody element, GATK restricts to just those camo regions
-grep -vE "^#" $camo_annotations | \
+if ! grep -vE "^#" $camo_annotations | \
 	awk '$5 == "CDS"' | \
 	bedtools intersect \
 		-a $alignto_sorted \
 		-b -\
-	> $gatk_bed
+	> $gatk_bed; then
+	echo "`date` bedtools intersect failed $camo_annotations and $alignto_sorted."
+	exit 1
+fi
 		
 # Create bed for regions that are low_mapq but NOT camouflaged
-bedtools subtract \
+if ! bedtools subtract \
 	-a $mapq_merged \
 	-b $camo_sorted \
-	> $mapq_not_camo
+	> $mapq_not_camo; then
+	echo "`date` bedtools subtract failed for $mapq_merged and $camo_sorted."
+	exit 1
+fi
 
 mkdir -p $RESULT_DIR
 cp $mapq_merged $depth_merged $dark_merged \
