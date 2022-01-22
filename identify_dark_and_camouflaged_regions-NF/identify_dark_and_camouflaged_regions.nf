@@ -20,7 +20,8 @@ params.ref_index_bwt="${projectDir}/../sequencing_resources/references/Ensembl/h
 //params.ref_index_bwt="${projectDir}/../sequencing_resources/references/Homo_sapiens.GRCh38_onlyChr22.fa.bwt"
 
 // params.crams = "${projectDir}/../samples/ADSP/crams/*.cram"
-params.crams = "${projectDir}/test_data/ADSP_sample_crams/*"
+// params.crams = "${projectDir}/test_data/ADSP_sample_crams/*"
+params.crams = "${projectDir}/original_ADSP_samples/*"
 params.ref_tag = 'hg38'
 params.gff = "${projectDir}/../sequencing_resources/annotations/Ensembl/hg38_release_93/Homo_sapiens.GRCh38.93.gff3"
 params.threads = 16
