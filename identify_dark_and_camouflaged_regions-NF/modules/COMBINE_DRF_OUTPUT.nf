@@ -6,7 +6,7 @@ process COMBINE_DRF_OUTPUT {
      */
     publishDir("${params.results_dir}/COMBINE_DRF_OUTPUT", mode: 'copy')
 
-	label 'combine_drf_output'
+	label 'COMBINE_DRF_OUTPUT'
 
 	input:
 		file(low_mapq_bed_list)

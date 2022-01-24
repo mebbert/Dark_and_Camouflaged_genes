@@ -7,7 +7,7 @@ process CREATE_BED_FILE {
     publishDir("${params.results_dir}/CREATE_BED_FILE", mode: 'copy')
 	// publishDir "${projectDir}/../results/create_bed_file", mode: 'copy'
 
-	label 'create_bed_file'
+	label 'CREATE_BED_FILE'
 
 	input:
 		path(low_depth)
@@ -21,7 +21,7 @@ process CREATE_BED_FILE {
 
 	output:
 		// path 'illuminaRL100.hg38*' 
-		path "${sequencer}.${ref_tag}*' 
+		path "${sequencer}.${ref_tag}*" 
 
 	script:
 	"""

@@ -6,7 +6,7 @@ process RUN_DRF {
      */
     publishDir("${params.results_dir}/RUN_DRF", mode: 'copy')
 
-	label 'run_drf'
+	label 'RUN_DRF'
 
 	input:
 		path(bam)
