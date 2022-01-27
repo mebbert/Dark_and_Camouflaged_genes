@@ -13,12 +13,24 @@ process REALIGN_SAMPLES {
 		val(align_to_ref)
 		val(ref_tag)
 		val(original_ref)
+        val(output_format)
 		
 	output:
-		path '*.bam', emit: final_bams
+        path '*.{bam,cram}', emit: final_alignments
 
 	script:
+
+    def avail_mem = task.memory ? task.memory.toGiga() : 0
+
+    /*
+     * Calculate the mem per thread. Divide by an extra thread to provide
+     * some buffer.
+     */
+    def mem_per_thread = (avail_mem).intdiv(task.cpus + 1)
+
+    // print "Mem per thread: $mem_per_thread"
+
 	"""
-	bash realign_bwa.sh ${cram} ${align_to_ref} ${ref_tag} ${original_ref}
+	bash realign_bwa.sh ${cram} ${align_to_ref} ${ref_tag} ${original_ref} ${output_format} $task.cpus $mem_per_thread
 	"""
 }

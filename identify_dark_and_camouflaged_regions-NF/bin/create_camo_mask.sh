@@ -8,60 +8,53 @@ set -x
 # of the three so all reads will align to a single region (to remove alignment
 # ambiguity).
 function maskGenome {
-	expanded=$1
-	i=$2
-	REF=$3
-	PREFIX=$4
+	EXPANDED_BED=$1
+	UNMASKED_REF=$2
+	PREFIX=$3
 
-	genome=${REF}.fai
-	ploidy=$((2*i))
-	out="${PREFIX}.ploidy_${ploidy}.fa"
-	awk "\$NF == $i" $expanded | \
+	unmasked_ref_index=${UNMASKED_REF}.fai
+	masked_ref="${PREFIX}.fa"
+	if ! cat $EXPANDED_BED | \
 		bedtools complement \
 			-i - \
-			-g $genome | \
+			-g $unmasked_ref_index | \
 		bedtools maskfasta \
-			-fi $REF \
+			-fi $UNMASKED_REF \
 			-bed - \
-			-fo $out
+			-fo $masked_ref; then
+		echo "bedtools failed to mask the ref fasta"
+		exit 1
+	fi
 
 	## Prepare the new masked file for bwt
-	bwa index -a bwtsw $out
-	samtools faidx $out
-	java -jar /usr/bin/picard/build/libs/picard.jar CreateSequenceDictionary \
-		REFERENCE=$out
-		OUTPUT=${out%.*}.dict
+	bwa index -a bwtsw $masked_ref
+	samtools faidx $masked_ref
+	gatk CreateSequenceDictionary -R $masked_ref
 }
 
-camo_bed=$1
-REF=$2
+# This is called the 'align_to_bed' because it's used to mask the genome, leaving only a single
+# 'camouflaged' region for each set of regions that are identical to each other.
+ALIGN_TO_BED=$1
+ALIGN_TO_REF=$2
+
+# Prefix for output file names. Should be very specific to the reference genome version.
 PREFIX=$3
 
 # Create an expanded bed files to allow reads that overlap with the region to
 # align easily (including on the ends of the region).
-expanded=${camo_bed//.bed/.expanded_50.bed}
-bedtools slop \
+EXPANDED_BED=${ALIGN_TO_BED//.bed/.expanded_50.bed}
+if ! bedtools slop \
 	-b 50 \
-	-i $camo_bed \
-	-g ${REF}.fai \
-	> $expanded
+	-i $ALIGN_TO_BED \
+	-g ${ALIGN_TO_REF}.fai \
+	> $EXPANDED_BED; then
+	echo "bedtools failed to invert the bed file for masking"
+	exit 1
+fi
 
 
-# For set of regions with identical matches from 2:5, mask the genome. We deal
-# with each ploidy individually because it affects how we call variants. Ploidy
-# goes up by the number of regions that are identical. e.g., if there are three
-# regions that are identical, ploidy is 2*3 = 6. We stop at five identical regions
-# because we do not have much confidence in calls beyond that; it's an area of
-# research.
-for i in $(seq 2 1 5)
-do
-	maskGenome \
-		$expanded \
-		$i \
-		$REF \
-		$PREFIX &
-done
-
-# Wait for all jobs launched in background to complete. Then return.
-wait
+maskGenome \
+	$EXPANDED_BED \
+	$ALIGN_TO_REF \
+	$PREFIX
 

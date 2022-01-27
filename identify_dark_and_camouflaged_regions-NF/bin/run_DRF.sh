@@ -13,8 +13,7 @@ RG=$(samtools view -H $bam | grep '^@RG' | head -1)
 [[ $RG =~ $sm_regex ]]
 name=${BASH_REMATCH[1]}
 
-echo "should print the name next"
-echo "$name"
+echo "`date`: Running sample $name"
 
 ## Calculate depth and mapq mass for every position in the genome
 ## Allows us to calculate average depth and average across samples

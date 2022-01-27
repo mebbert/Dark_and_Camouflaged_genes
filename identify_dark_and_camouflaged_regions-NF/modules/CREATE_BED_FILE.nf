@@ -5,7 +5,6 @@ process CREATE_BED_FILE {
      * rather than only making links.
      */
     publishDir("${params.results_dir}/CREATE_BED_FILE", mode: 'copy')
-	// publishDir "${projectDir}/../results/create_bed_file", mode: 'copy'
 
 	label 'CREATE_BED_FILE'
 
@@ -21,6 +20,7 @@ process CREATE_BED_FILE {
 
 	output:
 		// path 'illuminaRL100.hg38*' 
+		path "${sequencer}.${ref_tag}*align_to*.bed", emit align_to_bed
 		path "${sequencer}.${ref_tag}*" 
 
 	script:

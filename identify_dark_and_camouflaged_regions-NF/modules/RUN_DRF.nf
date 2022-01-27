@@ -10,8 +10,7 @@ process RUN_DRF {
 
 	input:
 		path(bam)
-		file(ref)
-		file(ref_index)
+		val(ref)
 		path(jar)
 
 	output:

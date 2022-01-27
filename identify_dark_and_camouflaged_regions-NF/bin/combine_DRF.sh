@@ -79,8 +79,8 @@ do
 done
 wait
 
-LOW_DEPTH_OUT=${RESULT_PREFIX}.dark.low_depth.bed
-LOW_MAPQ_OUT=${RESULT_PREFIX}.dark.low_mapq.bed
+LOW_DEPTH_OUT=${RESULT_PREFIX}.combined.dark.low_depth.bed
+LOW_MAPQ_OUT=${RESULT_PREFIX}.combined.dark.low_mapq.bed
 
 echo -e "chrom\tstart\tend\tavg_nMapQBelowThreshold\tavg_depth\tavg_percMapQBelowThreshold" > $LOW_DEPTH_OUT
 echo -e "chrom\tstart\tend\tavg_nMapQBelowThreshold\tavg_depth\tavg_percMapQBelowThreshold" > $LOW_MAPQ_OUT
