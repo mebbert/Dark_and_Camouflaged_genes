@@ -14,9 +14,10 @@ process REALIGN_SAMPLES {
 		val(ref_tag)
 		val(original_ref)
         val(output_format)
-		
+
+
 	output:
-        path '*.{bam,cram}', emit: final_alignments
+        path '*.{bam,cram}*', emit: final_alignments
 
 	script:
 
@@ -27,8 +28,6 @@ process REALIGN_SAMPLES {
      * some buffer.
      */
     def mem_per_thread = (avail_mem).intdiv(task.cpus + 1)
-
-    // print "Mem per thread: $mem_per_thread"
 
 	"""
 	bash realign_bwa.sh ${cram} ${align_to_ref} ${ref_tag} ${original_ref} ${output_format} $task.cpus $mem_per_thread
