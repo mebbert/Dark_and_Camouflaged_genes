@@ -19,6 +19,14 @@ process REALIGN_SAMPLES {
 
 	script:
 	"""
-	bash realign_bwa.sh ${cram} ${align_to_ref} ${ref_tag} ${original_ref}
+
+	def avail_mem = task.memory ? task.memory.toGiga() : 0
+
+	/*
+	 * Calculate the mem per thread. Divide by an extra thread to provide
+	 * some buffer.
+	 */
+	def mem_per_thread: (avail_mem).intdiv(task.cpus + 1)
+	bash realign_bwa.sh ${cram} ${align_to_ref} ${ref_tag} ${original_ref} $task.cpus $mem_per_thread
 	"""
 }
