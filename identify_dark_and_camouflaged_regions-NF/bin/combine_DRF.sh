@@ -14,17 +14,15 @@ LOW_MAPQ_BED_LIST=($LOW_MAPQ_BED_STRING_LIST)
 # The prefix for output files
 RESULT_PREFIX=$2
 
-# TMP_DIR="tmp/${JOB_ID}"
-# mkdir -p $TMP_DIR
+# The number of threads to split this task into
+THREADS=$3
 
 function combine() {
 	SUFFIX=$1
 	LOW_DEPTH_OUT=$2
 	LOW_MAPQ_OUT=$3
 
-	# COMBINE_INPUT="${TMP_DIR}/${suffix}.input"
 	COMBINE_INPUT="${suffix}.input"
-	# find $TMP_DIR -name "$suffix" > $COMBINE_INPUT
 	find . -name "$suffix" > $COMBINE_INPUT
 
 	touch $LOW_DEPTH_OUT
@@ -40,17 +38,15 @@ function combine() {
 # Count the number of lines in the first .bed file to estimate
 # the number of lines across all input .bed files.
 total_lines=$(wc -l ${LOW_MAPQ_BED_LIST[0]} | awk '{print $1}')
-chunks=16
-nline=$(( ($total_lines + $chunks - 1) / $chunks ))
+nline=$(( ($total_lines + $THREADS - 1) / $THREADS ))
 
-# For each low_mapq_bed file provided, split it into chunks
+# For each low_mapq_bed file provided, split it into THREADS
 # of $nline and output the files into a unique directory
 # for each sample.
 for low_mapq_bed in ${LOW_MAPQ_BED_LIST[@]}
 do
 	base=$(basename $low_mapq_bed)
 	sample=${base%%.*}
-	# sample_dir="${TMP_DIR}/$sample/"
 	sample_dir="$sample/"
 	
 	mkdir $sample_dir
@@ -58,9 +54,6 @@ do
 	split -l $((nline)) $low_mapq_bed $sample_dir &
 done
 wait
-
-# LOW_DEPTH="${TMP_DIR}/low_depth"
-# LOW_MAPQ="${TMP_DIR}/low_mapq"
 
 LOW_DEPTH="low_depth"
 LOW_MAPQ="low_mapq"

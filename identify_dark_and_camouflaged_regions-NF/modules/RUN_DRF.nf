@@ -9,7 +9,7 @@ process RUN_DRF {
 	label 'RUN_DRF'
 
 	input:
-		path(bam)
+		path(sample_input_file)
 		val(ref)
 		path(jar)
 
@@ -18,6 +18,6 @@ process RUN_DRF {
 
 	script:
 	"""
-	bash run_DRF.sh ${bam} ${ref} ${jar}
+	bash run_DRF.sh ${sample_input_file} ${ref} ${jar}
 	"""
 }

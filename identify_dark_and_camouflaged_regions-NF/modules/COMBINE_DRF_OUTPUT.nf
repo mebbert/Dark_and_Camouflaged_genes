@@ -18,6 +18,6 @@ process COMBINE_DRF_OUTPUT {
 
 	script:
 	"""
-	bash combine_DRF.sh '${low_mapq_bed_list}' $result_prefix
+	bash combine_DRF.sh '${low_mapq_bed_list}' $result_prefix $task.cpus
 	"""
 }

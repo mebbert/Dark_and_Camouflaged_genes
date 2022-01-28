@@ -62,8 +62,8 @@ if ! time samtools sort -@ $n_threads -n -m ${mem_per_thread}G $sample_input > $
 fi
 
 # Defining the fastq names
-tmp_fq1="${TMP_DIR}/tmp_${sampleName}_R1.fastq"
-tmp_fq2="${TMP_DIR}/tmp_${sampleName}_R2.fastq"
+fq1="${TMP_DIR}/${sampleName}_R1.fastq"
+fq2="${TMP_DIR}/${sampleName}_R2.fastq"
 
 
 # Export CRAM_REFERENCE so bamtofastq has it when the input is a .cram file
@@ -72,7 +72,7 @@ export CRAM_REFERENCE=$original_ref
 # Extracting all reads from the bam/cram and converting to fastq for
 # realignment
 echo "`date`: Converting to Fastq:"
-if ! time bedtools bamtofastq -i $sample_sorted_by_name -fq $tmp_fq1 -fq2 $tmp_fq2; then
+if ! time bedtools bamtofastq -i $sample_sorted_by_name -fq $fq1 -fq2 $fq2; then
 	echo "bamtofastq failed"
 	exit 1
 fi
@@ -122,10 +122,18 @@ final_sample_output_file="${sampleName}.${ref_tag}.${out_format}"
 
 # Sorting the aligned sample file
 echo "`date` Sorting final sample $out_format"
-if ! time samtools sort -@ $n_threads -m ${mem_per_thread}G $tmp_sample > $final_sample_output_file; then
-	echo "ERROR: Sorting final sample $out_format failed"
-	exit 1
+if [ "$out_format" = "bam" ]; then
+	if ! time samtools sort -@ $n_threads -m ${mem_per_thread}G $tmp_sample > $final_sample_output_file; then
+		echo "ERROR: Sorting final sample $out_format failed"
+		exit 1
+	fi
+else
+	if ! time samtools sort -O cram -@ $n_threads -m ${mem_per_thread}G $tmp_sample > $final_sample_output_file; then
+		echo "ERROR: Sorting final sample $out_format failed"
+		exit 1
+	fi
 fi
+
 
 # Indexing the sorted .bam/cram
 echo "`date` Indexing final $out_format file ($final_sample_output_file)"

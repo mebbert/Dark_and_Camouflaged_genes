@@ -9,7 +9,7 @@ process REALIGN_SAMPLES {
 	label 'REALIGN_SAMPLES'
 
 	input:
-		path(cram)
+		path(sample_input_file)
 		val(align_to_ref)
 		val(ref_tag)
 		val(original_ref)
@@ -17,7 +17,8 @@ process REALIGN_SAMPLES {
 
 
 	output:
-        path '*.{bam,cram}*', emit: final_alignments
+        path '*.{bam,cram}', emit: final_alignment
+        path '*.{bam,cram}.*', emit: final_alignment_index
 
 	script:
 
@@ -30,6 +31,7 @@ process REALIGN_SAMPLES {
     def mem_per_thread = (avail_mem).intdiv(task.cpus + 1)
 
 	"""
-	bash realign_bwa.sh ${cram} ${align_to_ref} ${ref_tag} ${original_ref} ${output_format} $task.cpus $mem_per_thread
+    echo "Sample file: $sample_input_file"
+	bash realign_bwa.sh ${sample_input_file} ${align_to_ref} ${ref_tag} ${original_ref} ${output_format} $task.cpus $mem_per_thread
 	"""
 }

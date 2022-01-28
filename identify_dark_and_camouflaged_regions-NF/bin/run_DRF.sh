@@ -3,13 +3,13 @@
 # Enable bash debugging to log all commands
 set -x
 
-bam=$1 #Bam input into DRF program
-ref=$2 # Human Reference genome used in the alignment 
+sample_input_file=$1 #Bam input into DRF program
+original_ref=$2 # Human Reference genome used in the alignment 
 DRF_jar=$3 #Path to DRF jar
 
 #Regex to Extract Sample name from Bam file
 sm_regex="SM:([A-Za-z0-9_\-]+)"
-RG=$(samtools view -H $bam | grep '^@RG' | head -1)
+RG=$(samtools view -H $sample_input_file | grep '^@RG' | head -1)
 [[ $RG =~ $sm_regex ]]
 name=${BASH_REMATCH[1]}
 
@@ -25,8 +25,8 @@ low_mapq_bed="${name}.min_depth_${min_depth}.min_mapq_mass_${min_mapq_mass}.mapq
 inc_bed="/dev/null" # No need to store incomplete bases for each sample
 
 java -Xmx32G -jar $DRF_jar \
-		-i $bam \
-		--human-ref $ref \
+		-i $sample_input_file \
+		--human-ref $original_ref \
 		--min-region-size 1 \
 		--mapq-threshold $mapq_thresh \
 		--min-mapq-mass $min_mapq_mass \

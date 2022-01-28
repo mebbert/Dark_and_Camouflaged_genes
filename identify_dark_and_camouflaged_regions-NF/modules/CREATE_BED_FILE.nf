@@ -12,7 +12,6 @@ process CREATE_BED_FILE {
 		path(low_depth)
 		path(low_mapq)
 		file(ref)
-		file(ref_index)
 		path(annotation_bed)
 		val(sequencer)
 		val(ref_tag)
@@ -20,8 +19,8 @@ process CREATE_BED_FILE {
 
 	output:
 		// path 'illuminaRL100.hg38*' 
-		path "${sequencer}.${ref_tag}*align_to*.bed", emit align_to_bed
-		path "${sequencer}.${ref_tag}*" 
+		path "*align_to*.bed", emit: align_to_bed
+		path "*" 
 
 	script:
 	"""

@@ -50,12 +50,15 @@ params.align_to_ref_tag = 'Ensembl_GRCh38_release_93'
  * /path/to/folder/<specific_file>.bam, etc.).
  */
 // params.input_sample_folder = "${projectDir}/../samples/ADSP/input_sample_folder/*.cram"
-// params.input_sample_folder = "${projectDir}/test_data/ADSP_sample_input_sample_folder/*"
+// params.input_sample_folder = "${projectDir}/test_data/ADSP_sample_crams/*"
 params.input_sample_folder = "${projectDir}/original_ADSP_samples/"
 
 /*
  * Specifies the final output format for re-aligned samples. Can be either '.bam' or '.cram' (w/ or
  * w/o the '.'
+ *
+ * TODO: RUN_DRF fails if set as cram because DRF does not handle it (complains about not providing
+ * the reference genome index).
  */
 params.output_format = 'bam'
 
@@ -93,13 +96,17 @@ params.results_dir = './results'
 params.mask_ref_prefix = 'hg38_camo_mask'
 
 log.info """\
- CALCULATE DARK AND CAMO REGIONS PIPELINE
+ IDENTIFY DARK AND CAMO REGIONS PIPELINE
  ==========================================
- cram reference         : ${params.original_ref}
- reference              : ${params.align_to_ref}
- input_sample_folder    : ${params.input_sample_folder}
- align_to_ref_tag                : ${params.align_to_ref_tag}
- reference indexes      : ${params.ref_index}
+ original reference             : ${params.original_ref}
+ align_to_ref                   : ${params.align_to_ref}
+ align_to_ref_tag               : ${params.align_to_ref_tag}
+ input_sample_folder            : ${params.input_sample_folder}
+ output_format                  : ${params.output_format}
+ align_to_gff                   : ${params.align_to_gff}
+ sequencer_tag                  : ${params.sequencer_tag}
+ results_dir                    : ${params.results_dir}
+ mask_ref_prefix                : ${params.mask_ref_prefix}
  """
 
 // Import Modules
@@ -109,19 +116,22 @@ include {COMBINE_DRF_OUTPUT} from './modules/COMBINE_DRF_OUTPUT.nf'
 //include {step_03_CALC_BAM_METRICS} from './modules/03_CALC_BAM_METRICS.nf'
 include {PREPARE_ANNOTATION_BED} from './modules/PREPARE_ANNOTATION_BED.nf'
 include {CREATE_BED_FILE} from './modules/CREATE_BED_FILE.nf'
+include {MASK_GENOME} from './modules/MASK_GENOME.nf'
 
 // Define initial files and channels
 /*
  * Return only *.sam, *.bam, and *.cram files (no index or other files that may
  * be in the folder).
  *
- * TODO: Make the pipeline actually support .bam files.
+ * TODO: Make the pipeline actually support .bam files as input.
 */
-samples = Channel.fromPath(params.input_sample_folder)
+samples = Channel.fromPath(params.input_sample_folder, checkIfExists: true)
                     .filter( ~/.*(\.sam|\.bam|\.cram)/ )
 align_to_ref = file(params.align_to_ref)
 original_ref = file(params.original_ref)
 align_to_ref_tag = params.align_to_ref_tag
+output_format = params.output_format
+align_to_gff = params.align_to_gff
 sequencer_tag = params.sequencer_tag
 run_drf_jar = file("${projectDir}/bin/DarkRegionFinder.jar")
 
@@ -136,8 +146,8 @@ workflow{
     /*
      * Realign input sample files
      */
-	REALIGN_SAMPLES(samples, align_to_ref, align_to_ref_tag,
-                    original_ref, output_format)
+	REALIGN_SAMPLES(samples, align_to_ref, align_to_ref_tag, original_ref,
+                     output_format)
 
     /*
      * Run 'Dark Region Finder' to create summary statistics for every position in the
@@ -146,7 +156,7 @@ workflow{
      *
      * DRF is begging to be parallelized, but we haven't done that. Very slow as it is.
      */
-	RUN_DRF(REALIGN_SAMPLES.out.final_alignments, align_to_ref, run_drf_jar)
+	RUN_DRF(REALIGN_SAMPLES.out.final_alignment, align_to_ref, run_drf_jar)
 
     /*
      * Combine DRF output across all samples run previously. The string passed in is used for naming
@@ -162,14 +172,14 @@ workflow{
     /*
      * Prepare the input annotation .gff3 file for use with defining camouflaged regions.
      */
-	PREPARE_ANNOTATION_BED(params.align_to_gff)
+	PREPARE_ANNOTATION_BED(align_to_gff)
 
     /*
      * Create final output files defining 'dark' and 'camouflaged' regions, along with various
      * statistics.
      */
 	CREATE_BED_FILE(COMBINE_DRF_OUTPUT.out.low_depth_out,
-                     COMBINE_DRF_OUTPUT.out.low_mapq_out, align_to_ref, ref_index,
+                     COMBINE_DRF_OUTPUT.out.low_mapq_out, align_to_ref, 
                      PREPARE_ANNOTATION_BED.out.prepped_anno_bed, sequencer_tag,
                      align_to_ref_tag)
 
