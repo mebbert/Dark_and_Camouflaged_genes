@@ -1,7 +1,22 @@
-// Make this pipeline a nextflow 2 implementation
+import java.text.SimpleDateFormat
+import java.io.File
+
+/*
+ * Make this pipeline a nextflow 2 implementation
+ */
 nextflow.enable.dsl=2
 
-// Pipeline parameter default values, can be modified by user when calling pipeline on command line (e.g. --ref reference.fa) ##
+/*
+ * Get current date and time
+ */
+def date = new Date()
+def sdf = new SimpleDateFormat("yyyy_MM_dd-HH:mm:ss")
+def time_stamp = sdf.format(date)
+
+/*
+ * Pipeline parameter default values, can be modified by user when calling pipeline on command line
+ * (e.g. --ref reference.fa) ##
+ */
 
 /*
  * Path to the reference the sample(s) are *currently* aligned to. This is only used if the input
@@ -42,16 +57,23 @@ params.align_to_ref = "${projectDir}/../sequencing_resources/references/Ensembl/
 params.align_to_ref_tag = 'Ensembl_GRCh38_release_93'
 
 /*
- * Path the the folder where input sample files are located. These files must be in either .sam,
- * .bam, or .cram format (or any combination thereof). 
+ * Path to input sample files including a 'wildcard' for which files to include. It cannot only be
+ * the path to the folder. These files must be
+ * in either .sam, .bam, or .cram format (or any combination thereof).
  * 
- * The input can simply a path to the folder (e.g., /path/to/folder/; w/ or w/o ending '/'), or it
- * can specify a glob to limit the intput to specific files (e.g., /path/to/folder/*.cram,
- * /path/to/folder/<specific_file>.bam, etc.).
+ * The glob must specify the intput (e.g., /path/to/folder/*, /path/to/folder/*.cram,
+ * /path/to/folder/<specific_file>.bam, etc.). The input will be limited to .sam, .bam, and .cram
+ * files before proceeding.
  */
-// params.input_sample_folder = "${projectDir}/../samples/ADSP/input_sample_folder/*.cram"
-// params.input_sample_folder = "${projectDir}/test_data/ADSP_sample_crams/*"
-params.input_sample_folder = "${projectDir}/original_ADSP_samples/"
+// params.input_sample_path = "${projectDir}/../samples/ADSP/input_sample_path/*.cram"
+// params.input_sample_path = "${projectDir}/test_data/ADSP_sample_crams/*"
+params.input_sample_path = "${projectDir}/original_ADSP_samples/*.cram"
+
+/*
+ * This string can be used to help name the results folder (if provided and included when defining
+ * the results parameter. 
+ */
+params.sample_input_tag = "Original_ADSP_samples"
 
 /*
  * Specifies the final output format for re-aligned samples. Can be either '.bam' or '.cram' (w/ or
@@ -88,7 +110,7 @@ params.sequencer_tag = 'illuminaRL100'
  * It must be either an absolute path or a relative path that includes a preceing './' or the global
  * variable "${project_dir}" (e.g., '${project_dir}/').
  */
-params.results_dir = './results'
+params.results_dir = "./results/${params.align_to_ref_tag}_${params.sequencer_tag}_${params.sample_input_tag}-${time_stamp}"
 
 /*
  * Prefix for masked reference files.
@@ -101,7 +123,7 @@ log.info """\
  original reference             : ${params.original_ref}
  align_to_ref                   : ${params.align_to_ref}
  align_to_ref_tag               : ${params.align_to_ref_tag}
- input_sample_folder            : ${params.input_sample_folder}
+ input_sample_path              : ${params.input_sample_path}
  output_format                  : ${params.output_format}
  align_to_gff                   : ${params.align_to_gff}
  sequencer_tag                  : ${params.sequencer_tag}
@@ -109,7 +131,9 @@ log.info """\
  mask_ref_prefix                : ${params.mask_ref_prefix}
  """
 
-// Import Modules
+/*
+ * Import Modules
+ */
 include {REALIGN_SAMPLES} from './modules/REALIGN_SAMPLES.nf'
 include {RUN_DRF} from './modules/RUN_DRF.nf'
 include {COMBINE_DRF_OUTPUT} from './modules/COMBINE_DRF_OUTPUT.nf'
@@ -118,15 +142,7 @@ include {PREPARE_ANNOTATION_BED} from './modules/PREPARE_ANNOTATION_BED.nf'
 include {CREATE_BED_FILE} from './modules/CREATE_BED_FILE.nf'
 include {MASK_GENOME} from './modules/MASK_GENOME.nf'
 
-// Define initial files and channels
-/*
- * Return only *.sam, *.bam, and *.cram files (no index or other files that may
- * be in the folder).
- *
- * TODO: Make the pipeline actually support .bam files as input.
-*/
-samples = Channel.fromPath(params.input_sample_folder, checkIfExists: true)
-                    .filter( ~/.*(\.sam|\.bam|\.cram)/ )
+
 align_to_ref = file(params.align_to_ref)
 original_ref = file(params.original_ref)
 align_to_ref_tag = params.align_to_ref_tag
@@ -136,7 +152,39 @@ sequencer_tag = params.sequencer_tag
 run_drf_jar = file("${projectDir}/bin/DarkRegionFinder.jar")
 
 
+/*
+ * Collect sample sam/bam/cram files from file input channel
+ */
+def collect_sample_files( input_dir ) {
+
+    /*
+     * Only accept sam/bam/cram
+     */ 
+    def pattern = ~/.*(\.sam|\.bam|\.cram)/
+    def results = []
+
+    input_dir.eachFileMatch(pattern) { item ->
+        results.add( item )
+    }
+
+    return results
+}
+
+
 workflow{
+
+    /*
+     * TODO: Make the pipeline actually support .bam files as input, and .cram files as output.
+     */
+
+    input_sample_path = file( params.input_sample_path )
+
+
+    /*
+     * Create channel from the path provided, allowing only sam/bam/cram files.
+     */
+    input_sample_files = Channel.fromPath(params.input_sample_path, checkIfExists: true)
+                        .filter( ~/.*(\.sam|\.bam|\.cram)/ )
 
     /*
      * Prefix for various output files.
@@ -146,7 +194,7 @@ workflow{
     /*
      * Realign input sample files
      */
-	REALIGN_SAMPLES(samples, align_to_ref, align_to_ref_tag, original_ref,
+	REALIGN_SAMPLES(input_sample_files, align_to_ref, align_to_ref_tag, original_ref,
                      output_format)
 
     /*
