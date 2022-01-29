@@ -17,7 +17,7 @@ function usage {
 	echo "Options:"
 	echo "	-t, --num_threads INT: number of threads to use (default = 1)"
 	echo "	-r, --results DIR: directory where the results will be saved (default = Sequencer/GenomeVers)"
-	exit 1
+	exit $?
 }
 
 NUM_THREADS=1
@@ -109,95 +109,184 @@ gatk_bed="${SEQUENCER}.${GVERS}.camo.GATK.bed"
 mapq_gene_bodies="low_mapq_gene_bodies.bed"
 mapq_not_camo="${SEQUENCER}.${GVERS}.low_mapq.NOT_camo.bed"
 
+################################
+# Function to test exit status #
+################################
+# function pipe_failed {
+# 
+# 	exit_status_list=("$@")
+# 
+# 	for status in "${exit_status_list[@]}"
+# 	do
+# 		# If exit status is not 0 (success) or 141 (SIGPIPE), throw error. Igore 141 because some
+# 		# commands intentionally close the pipe prematurely (e.g., remove_unassembled_contigs.py).
+# 		if [[ $status -ne 0 && $status -ne 141 ]]; then
+# 			# Return "true" (i.e., 0)
+# 			return 0
+# 		fi
+# 	done
+# 
+# 	# Return "false" (i.e., 1)
+# 	return 1
+# }
 
-# These first two processes can run simultaneously.
 
-# Merge coordinates for depth bed, removing regions that are less than 20bp long
+
+
+####################################################################################################
+# These first two processes can run simultaneously, but couldn't find a good way to capture failed #
+# exit status if we sent them to background with '&'.                                              #
+####################################################################################################
+
+##################################################################################
+# Merge coordinates for depth bed, removing regions that are less than 20bp long #
+##################################################################################
+# Swallow 141 (SIGPIPE) because remove_unassembled_contigs.py closes pipe abruptly.
 time bedtools merge -d 20 -c 5 -o mean,median -i $DEPTH_BED | \
-	python remove_unassembled_contigs.py | \
+	remove_unassembled_contigs.py | \
 	awk '{ if($3 - $2 > 20) print $0}' \
-	> $depth_merged & 
+	> $depth_merged \
+	|| if [[ $? -eq 141 ]]; then  # Swallow 141 (SIGPIPE)
+			true
+		else
+			echo "ERROR (`date`): Failed to merge coordinates for $DEPTH_BED. See log for details."
+			exit $?
+		fi
 
-	# Save PID for this background job to make sure
-	# it exits successfully.
-	depth_pid=$!
 
-# Merge coordinates for mapq bed, removing regions that are less than 20bp long
+# Check if the exit status for every cmd in the pipe were successful.
+# Cannot simply use 'if ! <cmd>' if piping multiple cmds together. The environment
+# variable $PIPESTATUS stores the status for all cmds in the pipe.
+# TMPSTATUS=("${PIPESTATUS[@]}")
+# if pipe_failed "${TMPSTATUS[@]}"; then
+# 	echo "ERROR (`date`): Failed to merge coordinates for $DEPTH_BED. See log for details."
+# 	exit $?
+# fi
+	
+
+
+#################################################################################
+# Merge coordinates for mapq bed, removing regions that are less than 20bp long #
+#################################################################################
+# Swallow 141 (SIGPIPE) because remove_unassembled_contigs.py closes pipe abruptly.
 time bedtools merge -d 20 -c 5 -o mean,median -i $MAPQ_BED | \
-	python remove_unassembled_contigs.py | \
+	remove_unassembled_contigs.py | \
 	awk '{ if($3 - $2 > 20) print $0}' \
-	> $mapq_merged &
+	> $mapq_merged \
+	|| if [[ $? -eq 141 ]]; then  # Swallow 141 (SIGPIPE)
+			true
+		else
+			echo "ERROR (`date`): Failed to merge coordinates for $MAPQ_BED. See log for details."
+			exit $?
+		fi
 
-	# Save PID for this background job to make sure
-	# it exits successfully.
-	mapq_pid=$!
 
-# Wait for previous processes to finish and check exit status
-had_failure=false
-if ! wait $depth_pid; then
-	echo "ERROR: `date` bedtools merge failed for $DEPTH_BED"
-	$had_failure=true
-fi
+# TMPSTATUS=("${PIPESTATUS[@]}")
+# if pipe_failed "${TMPSTATUS[@]}"; then
+# 	echo "ERROR (`date`): Failed to merge coordinates for $MAPQ_BED. See log for details."
+# 	exit $?
+# fi
 
-if ! wait $mapq_pid; then
-	echo "ERROR: `date` bedtools merge failed for $MAPQ_BED"
-	$had_failure=true
-fi
-
-if $had_failure; then
-	exit 1
-fi
 
 # Printing the lengths of each mapq region to a file
 echo -e "region_id\tchrom\tlength" >> $mapq_lengths
 if ! awk '{n +=1; print n,$1,($3 - $2)}' $mapq_merged >> $mapq_lengths; then
 	echo "ERROR: `date` awk failed for $mapq_merged"
-	exit 1
+	exit $?
 fi
 
-if ! cat $mapq_merged $depth_merged | \
+
+########################################
+# Merge dark-by-MAPQ and dark-by-depth #
+########################################
+cat $mapq_merged $depth_merged | \
 	bedtools sort -i - -faidx $faidx | \
 	bedtools merge -i - \
-	> $dark_merged; then
-	echo "ERROR: `date` bedtools sort/merge failed for $mapq_merged and $depth_merged"
-	exit 1
-fi
+	> $dark_merged \
+	|| {
+			echo "ERROR (`date`): Failed to merge dark-by-MAPQ and dark-by-depth. See log for details."
+			exit $?
+		}
 
-## Intersect all dark regions with gene annotation bed
-if ! bedtools intersect \
+# TMPSTATUS=("${PIPESTATUS[@]}")
+# if pipe_failed "${TMPSTATUS[@]}"; then
+# 	echo "ERROR (`date`): Failed to merge dark-by-MAPQ and dark-by-depth. See log for details."
+# 	exit $?
+# fi
+
+
+########################################################
+## Intersect all dark regions with gene annotation bed #
+########################################################
+bedtools intersect \
 	-a $ANNOTATION \
 	-b $dark_merged \
 	-loj | \
 	annotate_regions.py \
 		$percent_dark $biotype_dark $coding_dark "dark" \
-		> $dark_annotations; then
-	echo "ERROR: `date` bedtools intersect or annotate_regions.py failed for $ANNOTATION and $dark_merged"
-	exit 1
-fi
+		> $dark_annotations \
+	|| {
+			echo "ERROR (`date`): Failed to intersect all dark regions with gene annotation bed. See log for details."
+			exit $?
+		}
 
-## Intersect the low depth dark regions with gene annotation bed
-if ! bedtools intersect \
+
+# TMPSTATUS=("${PIPESTATUS[@]}")
+# if pipe_failed "${TMPSTATUS[@]}"; then
+# 	echo "ERROR (`date`): Failed to intersect all dark regions with gene annotation bed. See log for details."
+# 	exit $?
+# fi
+
+
+
+
+##################################################################
+## Intersect the low depth dark regions with gene annotation bed #
+##################################################################
+bedtools intersect \
 	-a $ANNOTATION \
 	-b $depth_merged \
 	-loj | \
 	annotate_regions.py \
 		$percent_depth $biotype_depth $coding_depth "dark by depth" \
-		> $depth_annotations; then
-	echo "ERROR: `date` bedtools intersect or annotate_regions.py failed for $ANNOTATION and $depth_merged"
-	exit 1
-fi
+		> $depth_annotations \
+	|| {
+			echo "ERROR (`date`): Failed to intersect the low depth dark regions with gene annotation bed. See log for details."
+			exit $?
+		}
 
-## Intersect the low mapq regions with gene annotation bed
-if ! bedtools intersect \
+# TMPSTATUS=("${PIPESTATUS[@]}")
+# if pipe_failed "${TMPSTATUS[@]}"; then
+# 	echo "ERROR (`date`): Failed to intersect the low depth dark regions with gene annotation bed. See log for details."
+# 	exit $?
+# fi
+
+
+
+############################################################
+## Intersect the low mapq regions with gene annotation bed #
+############################################################
+bedtools intersect \
 	-a $ANNOTATION \
 	-b $mapq_merged \
 	-loj | \
 	annotate_regions.py \
 		$percent_mapq $biotype_mapq $coding_mapq "dark by MAPQ" \
-		> $mapq_annotations; then
-	echo "ERROR: `date` bedtools intersect or annotate_regions.py failed for $ANNOTATION and $mapq_merged"
-	exit 1
-fi
+		> $mapq_annotations \
+	|| {
+			echo "ERROR (`date`): Failed to intersect the low mapq regions with gene annotation bed. See log for details."
+			exit $?
+		}
+
+
+# TMPSTATUS=("${PIPESTATUS[@]}")
+# if pipe_failed "${TMPSTATUS[@]}"; then
+# 	echo "ERROR (`date`): Failed to intersect the low mapq regions with gene annotation bed. See log for details."
+# 	exit $?
+# fi
+
+
+
 
 ## Take mapq_file and create a blat query sequence list
 #
@@ -207,22 +296,31 @@ fi
 # and the coordinates. This feature is useful, but not exactly 
 # backwards compatible. We now need to specify `-nameOnly`.
 mkdir -p "query"
-if ! cat $mapq_annotations | \
+cat $mapq_annotations | \
 	grep -vE "^#" | \
 	bedtools getfasta \
 		-fi $GENOME \
 		-bed - \
 		-nameOnly \
-		-fo $query; then
-	echo "ERROR: `date` bedtools getfasta failed for $mapq_annotations"
-	exit 1
-fi
+		-fo $query \
+	|| {
+			echo "ERROR (`date`): Failed to create blat query with 'bedtools getfasta'. See log for details."
+			exit $?
+		}
+
+# TMPSTATUS=("${PIPESTATUS[@]}")
+# if pipe_failed "${TMPSTATUS[@]}"; then
+# 	echo "ERROR (`date`): Failed to create blat query with 'bedtools getfasta'. See log for details."
+# 	exit $?
+# fi
+
+
 
 nLines=$(wc -l $query | awk '{print $1}')
 stepSize=$(($nLines / $NUM_THREADS))
 if [[ $(($stepSize % 2 )) == 1 ]]
 then
-	    stepSize=$(($stepSize + 1))
+	stepSize=$(($stepSize + 1))
 fi
 
 rm -rf "./blat_result"
@@ -274,12 +372,12 @@ for pid in "${pid_array[@]}"
 do
 	if ! wait $pid; then
 		$had_failure=true
-		echo "ERROR: `date` blat failed (PID: $pid)"
+		echo "ERROR (`date`): blat failed (PID: $pid)"
 	fi
 done
 
 if $had_failure; then
-	exit 1
+	exit $?
 fi
 
 ## Combine the blat results together and format them
@@ -287,15 +385,15 @@ fi
 ## removing blat hits that are less than 98% sequence identity
 echo "`date` blatting complete: combining blat output"
 if ! cat ${blat_result}.* > $blat_result; then
-	echo "ERROR: `date` cat failed for ${blat_result}.*"
-	exit 1
+	echo "ERROR (`date`): cat failed for ${blat_result}.*"
+	exit $?
 fi
 
 if ! score_blat_output.awk \
 	$blat_result \
 	> $blat_bed; then
 	echo "ERROR: `date` score_blat_output.awk failed for ${blat_result}"
-	exit 1
+	exit $?
 fi
 
 # echo "`date` awk 'BEGIN{OFS="\t"}{ print $7,$8,$9,$4 }' $mapq_annotations > $mapq_gene_bodies"
@@ -303,19 +401,31 @@ if ! awk -v "OFS=\t" '$1 !~ "^#" { print $7,$8,$9,$4 }' \
 	$mapq_annotations \
 	> $mapq_gene_bodies; then
 	echo "ERROR: `date` score_blat_output.awk failed for ${blat_result}"
-	exit 1
+	exit $?
 fi
 
-## Intersect the blat output to original list of low_mapq regions
-if ! bedtools intersect \
+
+###################################################################
+## Intersect the blat output to original list of low_mapq regions #
+###################################################################
+bedtools intersect \
 	-a $blat_bed \
 	-b $mapq_gene_bodies \
 	-loj | \
 	awk '$6 != "."' \
-	> $mapped_blat_results; then
-	echo "ERROR: `date` bedtools intersect failed for ${blat_bed} and $mapq_gene_bodies"
-	exit 1
-fi
+	> $mapped_blat_results \
+	|| {
+			echo "ERROR (`date`): Failed to Intersect the blat output to original list of low_mapq regions. See log for details."
+			exit $?
+		}
+
+# TMPSTATUS=("${PIPESTATUS[@]}")
+# if pipe_failed "${TMPSTATUS[@]}"; then
+# 	echo "ERROR (`date`): Failed to Intersect the blat output to original list of low_mapq regions. See log for details."
+# 	exit $?
+# fi
+
+
 
 ## From the scored intersected blat output, calculates the maps
 ## of which camo regions align to which other ones, and creates camo sets
@@ -328,7 +438,7 @@ if ! extract_camo_regions.py \
 	$align_to \
 	$camo_bed; then
 	echo "ERROR: `date` extract_camo_regions.py failed."
-	exit 1
+	exit $?
 fi
 
 echo "`date` sorting camo bed files"
@@ -336,53 +446,83 @@ echo "`date` sorting camo bed files"
 #extract_camo_regions prints out whole camo gene bodies,
 #also same gene bodies may be printed twice, so first merge then
 #intersect with merged_mapq to get just the Camo Region boundaries
-if ! bedtools sort -i $camo_bed -faidx $faidx | \
+bedtools sort -i $camo_bed -faidx $faidx | \
 	bedtools merge -i - | \
-	bedtools intersect -a - -b $mapq_merged > $camo_sorted; then
-	echo "ERROR: `date` bedtools sort/merge/intersect failed for $camo_bed."
-	exit 1
-fi
+	bedtools intersect -a - -b $mapq_merged > $camo_sorted \
+	|| {
+			echo "ERROR (`date`): bedtools sort/merge/intersect failed for $camo_bed. See log for details."
+			exit $?
+		}
+
+# TMPSTATUS=("${PIPESTATUS[@]}")
+# if pipe_failed "${TMPSTATUS[@]}"; then
+# 	echo "ERROR (`date`): bedtools sort/merge/intersect failed for $camo_bed. See log for details."
+# 	exit $?
+# fi
+
+
+
 if ! bedtools sort -i $align_to -faidx $faidx > $alignto_sorted; then
 	echo "ERROR: `date` bedtools sort failed for $align_to."
-	exit 1
+	exit $?
 fi
 if ! bedtools sort -i $realign  -faidx $faidx > $realign_sorted; then
 	echo "ERROR: `date` bedtools sort failed for $realign."
-	exit 1
+	exit $?
 fi
 
-## Create Camo Annotation table (intersecting camo regions to gene annotation bed)
-if ! bedtools intersect \
+####################################################################################
+## Create Camo Annotation table (intersecting camo regions to gene annotation bed) #
+####################################################################################
+bedtools intersect \
 	-a $ANNOTATION \
 	-b $camo_sorted \
 	-loj | \
 	annotate_regions.py \
 		$percent_camo $biotype_camo $coding_camo "camo" \
-		> $camo_annotations; then
-	echo "ERROR: `date` bedtools intersect failed for $ANNOTATION and $camo_sorted."
-	exit 1
-fi
+		> $camo_annotations \
+	|| {
+			echo "ERROR (`date`): Failed to create Camo Annotation table. See log for details."
+			exit $?
+		}
+
+# TMPSTATUS=("${PIPESTATUS[@]}")
+# if pipe_failed "${TMPSTATUS[@]}"; then
+# 	echo "ERROR (`date`): Failed to create Camo Annotation table. See log for details."
+# 	exit $?
+# fi
 
 ## Create GATK bed: bed that will give regions were camo variants will be called
 ## The GATK bed is the CDS align to regions that are exclusively camo,
 ## The normal align_to lists the whole genebody element, GATK restricts to just those camo regions
-if ! grep -vE "^#" $camo_annotations | \
+grep -vE "^#" $camo_annotations | \
 	awk '$5 == "CDS"' | \
 	bedtools intersect \
 		-a $alignto_sorted \
 		-b -\
-	> $gatk_bed; then
-	echo "ERROR: `date` bedtools intersect failed $camo_annotations and $alignto_sorted."
-	exit 1
-fi
+	> $gatk_bed \
+	|| {
+			echo "ERROR (`date`): Failed to create GATK bed. See log for details."
+			exit $?
+		}
+
+# TMPSTATUS=("${PIPESTATUS[@]}")
+# if pipe_failed "${TMPSTATUS[@]}"; then
+# 	echo "ERROR (`date`): Failed to create GATK bed. See log for details."
+# 	exit $?
+# fi
+
+
 		
-# Create bed for regions that are low_mapq but NOT camouflaged
+################################################################
+# Create bed for regions that are low_mapq but NOT camouflaged #
+################################################################
 if ! bedtools subtract \
 	-a $mapq_merged \
 	-b $camo_sorted \
 	> $mapq_not_camo; then
-	echo "ERROR: `date` bedtools subtract failed for $mapq_merged and $camo_sorted."
-	exit 1
+	echo "ERROR (`date`): Failed to create bed for regions that are low_mapq but NOT camouflaged. See log for details."
+	exit $?
 fi
 
 # mkdir -p $RESULT_DIR

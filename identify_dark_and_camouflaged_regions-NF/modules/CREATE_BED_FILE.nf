@@ -11,7 +11,7 @@ process CREATE_BED_FILE {
 	input:
 		path(low_depth)
 		path(low_mapq)
-		file(ref)
+		val(ref)
 		path(annotation_bed)
 		val(sequencer)
 		val(ref_tag)

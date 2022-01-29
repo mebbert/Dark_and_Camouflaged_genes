@@ -73,6 +73,7 @@ params.input_sample_path = "${projectDir}/original_ADSP_samples/*.cram"
  * This string can be used to help name the results folder (if provided and included when defining
  * the results parameter. 
  */
+// params.sample_input_tag = "Test_samples"
 params.sample_input_tag = "Original_ADSP_samples"
 
 /*
