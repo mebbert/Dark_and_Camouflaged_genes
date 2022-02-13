@@ -77,10 +77,6 @@ if ! time bedtools bamtofastq -i $sample_sorted_by_name -fq $fq1 -fq2 $fq2; then
 	exit 1
 fi
 
-# Defining the fastq names
-fq1="${TMP_DIR}/${sampleName}_R1.fastq"
-fq2="${TMP_DIR}/${sampleName}_R2.fastq"
-
 # Fix bad formatting this sample's read names (uses old format that makes bwa choke). This was used
 # for one specific sample from dbGap that was originally aligned many years ago and had some funky
 # read names that bwa choked on. I'm leaving this here just in case it's ever useful. This removes

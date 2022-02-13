@@ -1,10 +1,10 @@
-process MASK_GENOME {
+process MASK_GENOME_PROC {
 
     /*
      * Publish results. 'mode: copy' will copy the files into the publishDir
      * rather than only making links.
      */
-    publishDir("${params.results_dir}/MASK_GENOME", mode: 'copy')
+    publishDir("${params.results_dir}/06-MASK_GENOME", mode: 'copy')
 	
 	label 'MASK_GENOME'
 

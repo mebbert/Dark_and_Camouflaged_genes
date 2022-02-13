@@ -1,10 +1,10 @@
-process PREPARE_ANNOTATION_BED {
+process PREPARE_ANNOTATION_BED_PROC {
 	
     /*
      * Publish results. 'mode: copy' will copy the files into the publishDir
      * rather than only making links.
      */
-    publishDir("${params.results_dir}/PREPARE_ANNOTATION_BED", mode: 'copy')
+    publishDir("${params.results_dir}/04-PREPARE_ANNOTATION_BED", mode: 'copy')
 
 	label 'local'
 

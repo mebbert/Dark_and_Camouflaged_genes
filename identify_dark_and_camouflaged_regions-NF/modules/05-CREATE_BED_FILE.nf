@@ -1,10 +1,10 @@
-process CREATE_BED_FILE {
+process CREATE_BED_FILE_PROC {
 	
     /*
      * Publish results. 'mode: copy' will copy the files into the publishDir
      * rather than only making links.
      */
-    publishDir("${params.results_dir}/CREATE_BED_FILE", mode: 'copy')
+    publishDir("${params.results_dir}/05-CREATE_BED_FILE", mode: 'copy')
 
 	label 'CREATE_BED_FILE'
 
@@ -19,7 +19,7 @@ process CREATE_BED_FILE {
 
 	output:
 		// path 'illuminaRL100.hg38*' 
-		path "*align_to*.bed", emit: align_to_bed
+		path "*align_to.sorted.bed", emit: align_to_bed
 		path "*" 
 
 	script:
