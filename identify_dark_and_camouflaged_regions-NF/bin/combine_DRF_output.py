@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # USAGE: python combine_DRF_output.py low_mapq_file_list combined_low_depth_out_file
 # combined_low_mapq_out_file
 #	low_mapq_file_list: list of DRF (low_mapQ) outputs to combine

@@ -135,16 +135,16 @@ fi
 # fi
 
 
-##################################################
-# Store sample name and RG to file for alignment #
-##################################################
-RG_file="${sample_name}.tuples.txt"
+###########################################################
+# Store sample name, .fastq, and RG to file for alignment #
+###########################################################
+tuple_file="${sample_name}.tuples.txt"
 
 # Create empty file
-> $RG_file
+> $tuple_file
 for fq_file in $PWD/${split_dir}/*
 do
-	echo "${sample_name},$fq_file,$RG" >> $RG_file
+	echo "${sample_name},$fq_file,$RG" >> $tuple_file
 done
 
 

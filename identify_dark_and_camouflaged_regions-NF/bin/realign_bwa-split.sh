@@ -37,9 +37,10 @@ echo "`date`: job running on `hostname`"
 #######################################
 
 # Nextflow .splitFastq appears to add '.[0-9]+' before the file extension
-regex="([A-Za-z0-9_\-]+)_R[12].split.[0-9]+.fastq"
-[[ $fq1 =~ $regex ]] 
+regex="([A-Za-z0-9_\-]+).interleaved_R1_R2.(split.[0-9]+).fastq"
+[[ $fq =~ $regex ]] 
 sample_name_from_file_name=${BASH_REMATCH[1]}
+split_num=${BASH_REMATCH[2]}
 
 
 echo "RG: \"$sample_RG\""
@@ -54,7 +55,7 @@ if [[ ${sample_name} != ${sample_name_from_file_name} ]]; then
 		  " sample name obtained from .fastq file." \
 		  "Provided name: $sample_name" \
 		  "Name from file: $sample_name_from_file_name" \
-		  "File name obtained from: $fq1"
+		  "File name obtained from: $fq"
 	exit 1
 fi
 
@@ -77,7 +78,7 @@ echo "`date`: Realigning sample $sample_name"
 # Aligning fastqs to $align_to_ref and converting to .bam file #
 ################################################################
 
-tmp_sample="${sample_name}.unsorted.mini.${out_format}"
+tmp_sample="${sample_name}.unsorted.mini.${split_num}.${out_format}"
 
 if [ "$out_format" = "bam" ]; then
 	echo "`date` Aligning to $sample_name to ${align_to_ref}. Output will be .bam file"
@@ -106,15 +107,15 @@ fi
 
 
 
-#######################
-# Index the .bam/cram #
-#######################
-# echo "`date` Indexing mini $out_format file ($tmp_sample)"
-# if ! time samtools index $tmp_sample; then
-# 	echo "ERROR: Indexing $tmp_sample failed."
-# 	exit 1
-# fi
 
+#############################################################
+# Create tuple file containing sample name and aligned file #
+#############################################################
+tuple_file="${sample_name}.${split_num}.tuples.txt"
+
+# Create empty file
+> $tuple_file
+echo "${sample_name},${PWD}/${tmp_sample}" > $tuple_file
 
 echo "`date` DONE!"
 #rm -rfv $TMP_DIR

@@ -68,6 +68,7 @@ params.align_to_ref_tag = 'Ensembl_GRCh38_release_93'
  * files before proceeding.
  */
 params.input_sample_path = "${projectDir}/test_data/ADSP_sample_crams/*"
+// params.input_sample_path = file( "${projectDir}/test_data/ADSP_sample_crams/A-CUHS-CU003023-test.cram" )
 // params.input_sample_path = "${projectDir}/original_ADSP_samples/*.cram"
 
 /*
@@ -76,6 +77,19 @@ params.input_sample_path = "${projectDir}/test_data/ADSP_sample_crams/*"
  */
 params.sample_input_tag = "Test_samples"
 // params.sample_input_tag = "Original_ADSP_samples"
+
+/*
+ * Defines the number of reads per BWA alignment job.
+ *
+ * NOTE: If this number results in a single .fastq file for the sample, Nextflow
+ * will error out with something like the following:
+ * Invalid method invocation `groupKey` with arguments: A-CUHS-CU003023-test (java.lang.String), 26766997 (java.lang.Long) on Nextflow type
+ *
+ * This error happens because `fastq_files.size()` returns the file size for the single file
+ * returned, rather than reporting the size of the list of files, which is what is expected.
+ * Nextflow channels seem inherently buggy to me.
+ */
+params.reads_per_run = 100_000
 
 /*
  * Specifies the final output format for re-aligned samples. Can be either '.bam' or '.cram' (w/ or
@@ -116,6 +130,14 @@ params.results_dir = "./results/${params.align_to_ref_tag}_${params.sequencer_ta
  */
 params.mask_ref_prefix = 'hg38_camo_mask'
 
+
+/*
+ * Specify where the DRF jar file can be found
+ */
+params.DRF_jar = file("${projectDir}/bin/DarkRegionFinder.jar")
+
+
+
 log.info """\
  IDENTIFY DARK AND CAMO REGIONS PIPELINE
  ==========================================
@@ -123,6 +145,7 @@ log.info """\
  align_to_ref                   : ${params.align_to_ref}
  align_to_ref_tag               : ${params.align_to_ref_tag}
  input_sample_path              : ${params.input_sample_path}
+ reads_per_run                  : ${params.reads_per_run}
  output_format                  : ${params.output_format}
  align_to_gff                   : ${params.align_to_gff}
  sequencer_tag                  : ${params.sequencer_tag}
@@ -133,7 +156,7 @@ log.info """\
 /*
  * Import Modules
  */
-include {REALIGN_SAMPLES_WF} from './modules/01-REALIGN_SAMPLES.nf'
+include {REALIGN_SAMPLES_WF} from './modules/01-REALIGN_SAMPLES-STEVE.nf'
 include {RUN_DRF_WF} from './modules/02-RUN_DRF.nf'
 include {COMBINE_DRF_OUTPUT_PROC} from './modules/03-COMBINE_DRF_OUTPUT.nf'
 //include {step_03_CALC_BAM_METRICS} from './modules/03_CALC_BAM_METRICS.nf'
@@ -142,13 +165,6 @@ include {CREATE_BED_FILE_PROC} from './modules/05-CREATE_BED_FILE.nf'
 include {MASK_GENOME_PROC} from './modules/06-MASK_GENOME.nf'
 
 
-align_to_ref = file(params.align_to_ref)
-original_ref = file(params.original_ref)
-align_to_ref_tag = params.align_to_ref_tag
-output_format = params.output_format
-align_to_gff = params.align_to_gff
-sequencer_tag = params.sequencer_tag
-DRF_jar = file("${projectDir}/bin/DarkRegionFinder.jar")
 
 
 /*
@@ -246,23 +262,23 @@ workflow{
      */
     // input_sample_path = file( params.input_sample_path )
     // input_sample_path = file( "${projectDir}/test_data/ADSP_sample_crams/*.cram" )
-    input_sample_path = file( "${projectDir}/test_data/ADSP_sample_crams/A-CUHS-CU003023-test.cram" )
-    input_sample_file_ch = Channel.fromPath(input_sample_path, checkIfExists: true)
-                        .filter( ~/.*(\.sam|\.bam|\.cram)/ )
+    // input_sample_path = file( "${projectDir}/test_data/ADSP_sample_crams/A-CUHS-CU003023-test.cram" )
+//    input_sample_file_ch = Channel.fromPath(input_sample_path, checkIfExists: true)
+//                        .filter( ~/.*(\.sam|\.bam|\.cram)/ )
 
     /*
      * Prefix for various output files.
      */
-    file_prefix = "${sequencer_tag}.${align_to_ref_tag}"
+    file_prefix = "${params.sequencer_tag}.${params.align_to_ref_tag}"
 
     /*
      * Realign input sample files
      */
 //	REALIGN_SAMPLES_PROC(input_sample_file_ch, align_to_ref, align_to_ref_tag, original_ref,
 //                     output_format)
-    reads_per_job = 100_000
-	REALIGN_SAMPLES_WF(input_sample_file_ch, reads_per_job, original_ref, align_to_ref, align_to_ref_tag,
-                       output_format)
+// 	REALIGN_SAMPLES_WF(input_sample_file_ch, reads_per_job, original_ref, align_to_ref, align_to_ref_tag,
+//                        output_format)
+	REALIGN_SAMPLES_WF(params.input_sample_path)
 
     /*
      * Run 'Dark Region Finder' to create summary statistics for every position in the

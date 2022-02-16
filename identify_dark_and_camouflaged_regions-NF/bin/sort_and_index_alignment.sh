@@ -5,10 +5,9 @@ set -x
 
 sample_alignment_file=$1
 sample_name=$2
-ref_tag=$3
-out_format_param=$4
-n_threads=$5
-mem_per_thread=$6
+out_format_param=$3
+n_threads=$4
+mem_per_thread=$5
 
 
 echo "`date`: job running on `hostname`"
@@ -28,9 +27,10 @@ fi
 
 
 
-regex="([A-Za-z0-9_\-]+).unsorted.mini.(cram|bam|CRAM|BAM|Cram|Bam)"
+regex="([A-Za-z0-9_\-]+).unsorted.mini.(split.[0-9]+).(cram|bam|CRAM|BAM|Cram|Bam)"
 [[ ${sample_alignment_file} =~ $regex ]] 
 sample_name_from_file_name=${BASH_REMATCH[1]}
+split_num=${BASH_REMATCH[2]}
 
 
 #############################################
@@ -50,7 +50,7 @@ fi
 
 echo "`date`: Sorting and indexing $sample_alignment_file" 
 
-final_mini_output_file="${sample_name}.sorted.mini.${out_format}"
+final_mini_output_file="${sample_name}.sorted.mini.${split_num}.${out_format}"
 
 
 
@@ -92,6 +92,16 @@ else
 	echo "quickcheck happy!"
 fi
 
+
+
+
+#####################################################################
+# Create tuple file containing sample name, aligned file, and index #
+#####################################################################
+tuple_file="${sample_name}.${split_num}.tuples.txt"
+
+index_file=(${PWD}/${final_mini_output_file}.*)
+echo "${sample_name},${PWD}/${final_mini_output_file},${index_file}" > $tuple_file
 
 echo "`date` DONE!"
 #rm -rfv $TMP_DIR
