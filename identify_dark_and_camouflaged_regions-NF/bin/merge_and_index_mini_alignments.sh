@@ -3,11 +3,12 @@
 # Enable bash debugging to log all commands
 set -x
 
-sample_alignment_file=$1
+path_to_alignment_files=$1
 sample_name=$2
-out_format_param=$3
-n_threads=$4
-mem_per_thread=$5
+ref_tag=$3
+out_format_param=$4
+n_threads=$5
+mem_per_thread=$6
 
 
 echo "`date`: job running on `hostname`"
@@ -26,11 +27,16 @@ else
 fi
 
 
+file_list=($path_to_alignment_files/*.cram)
+if [[ "${file_list[0]}" == *"*.cram"* ]]; then
+	file_list=($path_to_alignment_files/*.bam)
+fi
 
-regex="([A-Za-z0-9_\-]+).unsorted.mini.(split.[0-9]+).(cram|bam|CRAM|BAM|Cram|Bam)"
-[[ ${sample_alignment_file} =~ $regex ]] 
+first_file="${file_list[0]}"
+
+regex="([A-Za-z0-9_\-]+).sorted.mini.(split.[0-9]+).(cram|bam|CRAM|BAM|Cram|Bam)"
+[[ ${first_file} =~ $regex ]] 
 sample_name_from_file_name=${BASH_REMATCH[1]}
-split_num=${BASH_REMATCH[2]}
 
 
 #############################################
@@ -43,30 +49,30 @@ if [[ ${sample_name} != ${sample_name_from_file_name} ]]; then
 		  " sample name obtained from input file." \
 		  "Provided name: $sample_name" \
 		  "Name from file: $sample_name_from_file_name" \
-		  "File name obtained from: $sample_alignment_file"
+		  "File name obtained from: $first_file"
 	exit 1
 fi
 
 
-echo "`date`: Sorting and indexing $sample_alignment_file" 
 
-final_mini_output_file="${sample_name}.sorted.mini.${split_num}.${out_format}"
+echo "`date`: Merging and indexing files located at $path_to_alignment_files" 
 
+final_output_file="${sample_name}.${ref_tag}.sorted.merged.final.${out_format}"
 
 
 ###################################
 # Sorting the aligned sample file #
 ###################################
 
-echo "`date` Sorting final sample $final_mini_output_file"
+echo "`date` Sorting final sample $final_output_file"
 if [ "$out_format" = "bam" ]; then
-	if ! time samtools sort -@ $n_threads -m ${mem_per_thread}G $sample_alignment_file > $final_mini_output_file; then
-		echo "ERROR: Sorting final sample $out_format failed"
+	if ! time samtools merge -pc -@ $n_threads -o $final_output_file ${file_list[@]}; then
+		echo "ERROR: Merging mini $out_format files failed"
 		exit 1
 	fi
 else
-	if ! time samtools sort -O cram -@ $n_threads -m ${mem_per_thread}G $sample_alignment_file > $final_mini_output_file; then
-		echo "ERROR: Sorting final sample $out_format failed"
+	if ! time samtools merge -pc -O cram -@ $n_threads -o $final_output_file ${file_list[@]}; then
+		echo "ERROR: Merging mini $out_format files failed"
 		exit 1
 	fi
 fi
@@ -76,32 +82,24 @@ fi
 #################################
 # Indexing the sorted .bam/cram #
 #################################
-echo "`date` Indexing final $out_format file ($final_mini_output_file)"
-if ! time samtools index $final_mini_output_file; then
+echo "`date` Indexing final $out_format file ($final_output_file)"
+if ! time samtools index $final_output_file; then
 	echo "ERROR: Indexing final $out_format failed"
 	exit 1
 fi
 
 
-# Validating the final .bam/cram for output.
+##############################################
+# Validating the final .bam/cram for output. #
+##############################################
 echo "`date` Validating $out_format"
-if ! time samtools quickcheck $final_mini_output_file; then
+if ! time samtools quickcheck $final_output_file; then
 	echo "quickcheck failed"
 	exit 1
 else
 	echo "quickcheck happy!"
 fi
 
-
-
-
-#####################################################################
-# Create tuple file containing sample name, aligned file, and index #
-#####################################################################
-tuple_file="${sample_name}.${split_num}.tuples.txt"
-
-index_file=(${PWD}/${final_mini_output_file}.*)
-echo "${sample_name},${PWD}/${final_mini_output_file},${index_file}" > $tuple_file
 
 echo "`date` DONE!"
 #rm -rfv $TMP_DIR
