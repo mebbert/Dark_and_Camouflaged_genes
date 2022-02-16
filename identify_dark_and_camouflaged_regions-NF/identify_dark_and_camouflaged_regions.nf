@@ -156,7 +156,7 @@ log.info """\
 /*
  * Import Modules
  */
-include {REALIGN_SAMPLES_WF} from './modules/01-REALIGN_SAMPLES-STEVE.nf'
+include {REALIGN_SAMPLES_WF} from './modules/01-REALIGN_SAMPLES.nf'
 include {RUN_DRF_WF} from './modules/02-RUN_DRF.nf'
 include {COMBINE_DRF_OUTPUT_PROC} from './modules/03-COMBINE_DRF_OUTPUT.nf'
 //include {step_03_CALC_BAM_METRICS} from './modules/03_CALC_BAM_METRICS.nf'

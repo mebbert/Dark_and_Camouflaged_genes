@@ -4,326 +4,280 @@
  */
 nextflow.enable.dsl=2
 
+
+/*
+ * The code herein is a complete conversion of our original .bash scripts to
+ * Nextflow. It was converted by @Steve on bioinformatics.stackexchange.com:
+ * https://bioinformatics.stackexchange.com/questions/18549/nextflow-dsl-v2-how-to-best-synchronize-multiple-outputs-from-a-single-proces/18566#18566
+ *
+ * I (Mark Ebbert) have modified the code a bit to handle .cram files and change
+ * naming conventions.
+ */
+
+
+/*
+ * REALIGN_SAMPLES_WF is the main workflow for re-aligning .(cr|b)am files
+ */
 workflow REALIGN_SAMPLES_WF {
 
     take:
-        sample_input_file_ch
-        n_reads_per_run
-        original_ref
-        align_to_ref
-        align_to_ref_tag
-        output_format
+        sample_input_files_path
+
 
     main:
 
     /*
-     * Generate fastq files from the original .(cr|b)am file and split into
-     * mini .fastq files with `n_reads_per_run` in each mini .fastq
+     * Create sample input tuples
      */
+    Channel.fromPath(sample_input_files_path, checkIfExists: true)
+        | filter( ~/.*(\.sam|\.bam|\.cram)/ )
+        | map { tuple( it.baseName, it ) }
+        | set { sample_input_files }
 
-    // sample_input_file_ch.view()
-    GENERATE_FASTQS_PROC(sample_input_file_ch, n_reads_per_run, original_ref)
+    samtools_view_header_proc( sample_input_files )
 
-
-    /*
-     * Get sample name, .fastq, and read group from the tuples file using Nextflow
-     */
-
-     GENERATE_FASTQS_PROC.out.sample_tuple_file
-        .map {
-           it.splitText()
+    sample_input_files
+        | samtools_collate_and_fastq_proc
+        | split_fastq_proc
+        | map { sample_name, fastq_files ->
+            tuple( groupKey(sample_name, fastq_files.size()), fastq_files )
         }
-        .flatten()
-        .map {
-            toks = it.trim().split(',')
-            sample_name = toks[0]
-            fq = toks[1]
-            rg = toks[2]
-            tuple(sample_name, fq, rg)
-            }
-        .set { sample_fq_tuples_ch }
+        | view()
+        | transpose()
+        | view()
+        | combine( samtools_view_header_proc.out, by: 0 )
+        | view()
+        | set { realignment_inputs }
 
-    /*
-     * Align fastq file pairs
-     */
-
-    ALIGN_FASTQ_BWA_PROC(sample_fq_tuples_ch, align_to_ref,
-                             align_to_ref_tag, original_ref, output_format)
-
-
-
-
-    /*
-     * Get sample name and .(cr|b)am from the tuples file using Nextflow
-     */
-
-     ALIGN_FASTQ_BWA_PROC.out.sample_tuple_file
-        .map {
-           it.splitText()
-        }
-        .flatten()
-        .map {
-            toks = it.trim().split(',')
-            sample_name = toks[0]
-            align_file = toks[1]
-            tuple(sample_name, align_file)
-            }
-        .set { sample_alignment_tuples_ch }
-
-
-    /*
-     * Sort and index the mini .(cr|b)am files
-     */
-    SAMTOOLS_SORT_AND_INDEX_MINI_PROC(sample_alignment_tuples_ch, output_format)
-
-
-
-
-    /*
-     * Get sample name and sorted .(cr|b)am from the tuples file using Nextflow
-     */
-
-     SAMTOOLS_SORT_AND_INDEX_MINI_PROC.out.sample_tuple_file
-        .collect()  // Need all of them
-        .flatten()  // flatten it back so we can iterate over the files
-        .map {
-           println "it: " + it
-           it.splitText()
-        }
-        .flatten()
-        .map {
-            toks = it.trim().split(',')
-            sample_name = toks[0]
-            sorted_file = toks[1]
-            sorted_index = toks[2]
-            tuple(sample_name, sorted_file, sorted_index)
-            }
-        .collect()
-        .view()
-        .set { sample_sorted_tuples_ch }
-
-
-    /*
-     * Merge the mini .(cr|b)am files
-     */
-
-    SAMTOOLS_MERGE_AND_INDEX_PROC(sample_sorted_tuples_ch, align_to_ref_tag, output_format)
-
+     bwa_mem_proc( realignment_inputs )
+         | samtools_coordinate_sort_proc
+         | groupTuple()
+         | map { sample_name, bam_files ->
+             tuple( sample_name.toString(), bam_files )
+         }
+         | samtools_merge_proc
+         | view()
 }
 
+process samtools_view_header_proc {
 
-process GENERATE_FASTQS_PROC {
+    tag { "${sample_name}:${bam.name}" }
 
-    label 'GENERATE_FASTQS_PROC'
+    label 'local'
 
     input:
-        path(sample_input_file)
-        val(n_reads_per_run)
-        val(original_ref)
+    tuple val(sample_name), path(bam)
 
     output:
-        path("*.tuples.txt"), emit: sample_tuple_file
-        // path("*.ReadGroup.txt"), emit: rg_file_path
-        // path("split_fqs/*.fastq"), emit: fastqs
-        // tuple path("*.ReadGroup.txt"), path("split_fqs/*.fastq"), \
-        //    emit: RG_and_fastqs
-        // tuple val(sample_input_file.baseName), path("*.ReadGroup.txt"), \
-        //    emit: sample_RG_file
-
-    script:
-
-    /*
-     * Calculate the mem per thread. Divide by double the number of allocated threads to provide
-     * buffer. Samtools' memory limit is wildly inaccurate and unpredictable, in my experience.
-     */
-    def avail_mem = task.memory ? task.memory.toGiga() : 0
-    def mem_per_thread = ( avail_mem ).intdiv( task.cpus * 2 )
-
+    tuple val(sample_name), path("${sample_name}.header.txt")
 
     """
-    generate_fastqs.sh $sample_input_file $n_reads_per_run $original_ref $task.cpus $mem_per_thread
+    samtools view \\
+        -H \\
+        -o "${sample_name}.header.txt" \\
+        "${bam}"
     """
-
 }
 
+process samtools_name_sort_proc {
 
+    tag { "${sample_name}:${bam.name}" }
 
-process ALIGN_FASTQ_BWA_PROC {
-
-	label 'REALIGN_SAMPLES'
-
-	input:
-        // tuple val(split_ID), path(fq1), path(fq2), path(sample_RG_file)
-        // tuple val(split_ID), path(fq1), path(fq2), val(sample_name), val(sampe_RG)
-        tuple val(sample_name), path(fq), val(sample_RG)
-		val(align_to_ref)
-		val(align_to_ref_tag)
-		val(original_ref)
-        val(output_format)
-
-
-	output:
-        path("*.tuples.txt"), emit: sample_tuple_file
-        
-        // path('*unsorted.mini.{bam,cram}'), emit: final_alignment
-        // val(sample_name)
-
-	script:
-
-    /*
-     * Sanity check: verify the split_ID (provided by Unix `split` when splitting
-     * the files) matches the split ID within the file names.
-     *
-     * Also verify provided sample name matches file names
-     */
-
-//     fq1_name = fq1.getName()
-//     fq2_name = fq2.getName()
-//     fq1_split_ID = fq1_name.split('\\.')[-2].toInteger()
-//     fq2_split_ID = fq2_name.split('\\.')[-2].toInteger()
-// 
-//     match = fq1_name =~ /([A-Za-z0-9_\-]+)_R[12]\.split\.\d+.fastq/
-//     fq1_sample_name = match[0][1]
-// 
-//     match = fq2_name =~ /([A-Za-z0-9_\-]+)_R[12]\.split\.\d+.fastq/
-//     fq2_sample_name = match[0][1]
-// 
-//     println fq1_sample_name
-//     println fq2_sample_name
-// 
-//     if( split_ID.toInteger() != fq1_split_ID ||
-//             split_ID.toInteger() != fq2_split_ID ){
-//         
-//         throw new Exception("ERROR: The .fastq files received in ALIGN_FASTQ_BWA_PROC do not" +
-//                 " match the split_ID provided.\n" +
-//                 "Split_ID received: $split_ID\n" +
-//                 "Fastq 1: $fq1\n" +
-//                 "Fastq 2: $fq2\n"
-//                 )
-//     }
-// 
-//     if( !fq1_sample_name.equals(sample_name) ||
-//             !fq2_sample_name.equals(sample_name) ){
-// 
-//         throw new Exception("ERROR: The .fastq files received in ALIGN_FASTQ_BWA_PROC do not" +
-//                 " match the sample name provided.\n" +
-//                 "Sample name received: $sample_name\n" +
-//                 "Fastq 1: $fq1\n" +
-//                 "Fastq 2: $fq2\n"
-//                 )
-//     }
-
-	"""
-	bash realign_bwa-split.sh $fq $sample_name \"$sample_RG\" ${align_to_ref} ${output_format} $task.cpus
-	"""
-}
-
-
-
-
-process SAMTOOLS_SORT_AND_INDEX_MINI_PROC {
-
-    /*
-     * Publish results. 'mode: copy' will copy the files into the publishDir
-     * rather than only making links.
-     */
-    // publishDir("${params.results_dir}/01-REALIGN_SAMPLES", mode: 'copy')
-
-    label 'SORT_AND_INDEX_SAMPLE_PROC'
+    cpus 4
+    memory 8.GB
 
     input:
-        tuple val(sample_name), path(final_mini_alignment_file)
-        val(output_format)
+    tuple val(sample_name), path(bam)
 
     output:
-        path("*.tuples.txt"), emit: sample_tuple_file
-        // tuple(val(sample_name), path '*sorted.mini.{bam,cram}*'), emit: sample_name_and_mini_output
+    tuple val(sample_name), path("${bam.baseName}.nsorted.bam")
 
     script:
-
-    /*
-     * Calculate the mem per thread. Divide by double the number of allocated threads to provide
-     * buffer. Samtools' memory limit is wildly inaccurate and unpredictable, in my experience.
-     */
-    def avail_mem = task.memory ? task.memory.toGiga() : 0
-    def mem_per_thread = ( avail_mem ).intdiv( task.cpus * 2 )
-
+    def avail_mem = task.memory ? task.memory.toGiga().intdiv(task.cpus) : 0
+    def mem_per_thread = avail_mem ? "-m ${avail_mem}G" : ''
 
     """
-    sort_and_index_alignment.sh $final_mini_alignment_file $sample_name $output_format $task.cpus $mem_per_thread
+    samtools sort \\
+        -@ "${task.cpus - 1}" \\
+        ${mem_per_thread} \\
+        -n \\
+        -o "${bam.baseName}.nsorted.bam" \\
+        -T "${bam.baseName}.nsorted" \\
+        "${bam}"
     """
 }
 
+process samtools_collate_and_fastq_proc {
 
+    tag { "${sample_name}:${bam.name}" }
 
-process SAMTOOLS_MERGE_AND_INDEX_PROC {
-     
-    /*
-     * Publish results. 'mode: copy' will copy the files into the publishDir
-     * rather than only making links.
-     */
-    publishDir("${params.results_dir}/01-REALIGN_SAMPLES", mode: 'copy')
-
-    label 'SORT_AND_INDEX_SAMPLE_PROC'
+    label 'samtools_collate_and_fastq_proc'
 
     input:
-        tuple val(sample_name), path(sorted_mini_alignment_file), path(sorted_mini_alignment_index)
-        val(align_to_ref_tag)
-        val(output_format)
+    tuple val(sample_name), path(bam)
 
     output:
-        path '*.sorted.merged.final.{bam,cram}', emit: final_sample_bam
+    tuple val(sample_name), path("${sample_name}.interleaved_R1_R2.fastq.gz")
+
+    """
+    samtools collate \\
+        -@ "${task.cpus - 1}" \\
+        -O \\
+        -f \\
+        "${bam}" \\
+        | \\
+    samtools fastq \\
+        -O \\
+        -T RG,BC \\
+        -0 /dev/null \\
+        --reference $params.original_ref \\
+        -c 1 \\
+        -o "${sample_name}.interleaved_R1_R2.fastq.gz" \\
+        -
+    """
+}
+
+process split_fastq_proc {
+
+    tag { "${sample_name}:${fastq.name}" }
+
+    label 'split_fastq_proc'
+
+    input:
+    tuple val(sample_name), path(fastq)
+
+    output:
+    tuple val(sample_name), path("${sample_name}.interleaved_R1_R2.split_${/[0-9]/*5}.fastq.gz")
+
+    """
+    split_fastq.py $sample_name $fastq $params.reads_per_run
+    """
+}
+
+process bwa_index_proc {
+
+    tag { fasta.name }
+
+    cpus 1
+    memory 12.GB
+
+    input:
+    path fasta
+
+    output:
+    tuple val(fasta.name), path("${fasta}.{amb,ann,bwt,pac,sa}")
+
+    """
+    bwa index "${fasta}"
+    """
+}
+
+process bwa_mem_proc {
+
+    tag { "${sample_name}:${fastq.name}" }
+
+    label 'bwa_mem_proc'
+
+    input:
+    tuple val(sample_name), path(fastq), path(header)
+
+    output:
+    tuple val(sample_name), path("${fastq.baseName}.unsorted.mini.bam")
 
     script:
-
-    /*
-     * Calculate the mem per thread. Divide by double the number of allocated threads to provide
-     * buffer. Samtools' memory limit is wildly inaccurate and unpredictable, in my experience.
-     */
-    def avail_mem = task.memory ? task.memory.toGiga() : 0
-    def mem_per_thread = ( avail_mem ).intdiv( task.cpus * 2 )
+    def task_cpus = task.cpus > 1 ? task.cpus - 1 : task.cpus
 
     """
-    merge_and_index_mini_alignments.sh \$PWD $sample_name $align_to_ref_tag $output_format $task.cpus $mem_per_thread
+    if [ "$params.output_format" = "bam" ]; then
+        bwa mem \\
+            -p \\
+            -t ${task_cpus} \\
+            -M \\
+            -C \\
+            -H <(grep "^@RG" "${header}") \\
+            "${params.align_to_ref}" \\
+            "${fastq}" |
+        samtools view \\
+            -1 \\
+            -o "${fastq.baseName}.unsorted.mini.bam" \\
+            -
+    else
+        bwa mem \\
+            -p \\
+            -t ${task_cpus} \\
+            -M \\
+            -C \\
+            -H <(grep "^@RG" "${header}") \\
+            "${params.align_to_ref}" \\
+            "${fastq}" |
+        samtools view \\
+            -C \\
+            -T params.align_to_ref \\
+            -o "${fastq.baseName}.unsorted.mini.bam" \\
+            -
+    fi
     """
 }
 
+process samtools_coordinate_sort_proc {
 
+    tag { "${sample_name}:${bam.name}" }
 
-process REALIGN_SAMPLES_PROC {
-	
-    /*
-     * Publish results. 'mode: copy' will copy the files into the publishDir
-     * rather than only making links.
-     */
-    publishDir("${params.results_dir}/01-REALIGN_SAMPLES", mode: 'copy')
+    label 'samtools_coordinate_sort_proc'
 
-	label 'REALIGN_SAMPLES'
+    input:
+    tuple val(sample_name), path(bam)
 
-	input:
-		path(sample_input_file)
-		val(align_to_ref)
-		val(align_to_ref_tag)
-		val(original_ref)
-        val(output_format)
+    output:
+    tuple val(sample_name), path("${bam.baseName}.csorted.bam")
 
+    script:
+    def avail_mem = task.memory ? task.memory.toGiga().intdiv(task.cpus) : 0
+    def mem_per_thread = avail_mem ? "${avail_mem}G" : ''
 
-	output:
-        path '*.{bam,cram}', emit: final_alignment
-        path '*.{bam,cram}.*', emit: final_alignment_index
-
-	script:
-
-    def avail_mem = task.memory ? task.memory.toGiga() : 0
-
-    /*
-     * Calculate the mem per thread. Divide by double the number of allocated threads to provide
-     * buffer. Samtools' memory limit is wildly inaccurate and unpredictable, in my experience.
-     */
-    def mem_per_thread = ( avail_mem ).intdiv( task.cpus * 2 )
-
-	"""
-    echo "Sample file: $sample_input_file"
-	bash realign_bwa.sh ${sample_input_file} ${align_to_ref} ${align_to_ref_tag} ${original_ref} ${output_format} $task.cpus $mem_per_thread
-	"""
+    """
+    if [ "$params.output_format" = "bam" ]; then
+        samtools sort \\
+            -@ "${task.cpus - 1}" \\
+            -m ${mem_per_thread} \\
+            -o "${bam.baseName}.csorted.bam" \\
+            -T "${bam.baseName}.csorted" \\
+            --write-index \\
+            "${bam}"
+    else
+        samtools sort \\
+            -@ "${task.cpus - 1}" \\
+            -m ${mem_per_thread} \\
+            -o "${bam.baseName}.csorted.bam" \\
+            -T "${bam.baseName}.csorted" \\
+            -O cram \\
+            --reference "${params.align_to_ref}" \\
+            --write-index \\
+            "${bam}"
+    fi
+    """
 }
+
+process samtools_merge_proc {
+
+    tag { sample_name }
+
+    label 'samtools_merge_proc'
+
+    input:
+    tuple val(sample_name), path(bams)
+
+    output:
+    tuple val(sample_name), path("${sample_name}.bam{,.bai}")
+
+    """
+    samtools merge \\
+        -c \\
+        -p \\
+        "${sample_name}.bam" \\
+        ${bams}
+    samtools index \\
+        "${sample_name}.bam"
+    """
+}
+
