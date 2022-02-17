@@ -10,12 +10,13 @@ nextflow.enable.dsl=2
  * the genome into intervals. The results for each sample are then combined to
  * be passed on to the next stage of the workflow which will combine *across*
  * samples.
+ *
+ * This part of the Identify dark and camouflaged regions workflow is not fully
+ * converted to Nextflow like the re-alignment portion was. It's a possible TODO.
  */
 workflow RUN_DRF_WF {
     take:
         sample_input_ch
-        align_to_ref
-        DRF_jar
         interval_length
 
     main:
@@ -23,8 +24,9 @@ workflow RUN_DRF_WF {
         /*
          * Create intervals to split DRF jobs across intervals
          */
-        // intervals = Channel.from( create_intervals( align_to_ref, interval_length ) )
-        intervals_ch = Channel.of('1:10000-20000', '5:55555-66666')
+        // intervals = create_intervals( params.align_to_ref, interval_length )
+        intervals = ['1:10000-20000', '5:55555-66666']
+        intervals_ch = Channel.from( intervals )
 
 
 
@@ -34,7 +36,7 @@ workflow RUN_DRF_WF {
         // sample_files = Channel.fromPath(sample_input_dir + "*.bam")
         // sample_files = Channel.fromPath(sample_input_dir + "A-CUHS-CU000208-BL-COL-56227BL1.Ensembl_GRCh38_release_93.bam")
         // sample_files.combine(intervals_ch).set { files_and_intervals }
-        // RUN_DRF_PROC( files_and_intervals, align_to_ref, DRF_jar)
+        // RUN_DRF_PROC( files_and_intervals)
 
         /*
          * Create cartesian product for samples and inputs so all intervals
@@ -43,7 +45,10 @@ workflow RUN_DRF_WF {
         samples_and_intervals = sample_input_ch
             .combine(intervals_ch)
 
-        RUN_DRF_PROC( samples_and_intervals, align_to_ref, DRF_jar)
+        RUN_DRF_PROC( samples_and_intervals )
+            | groupTuple(size: intervals.size())
+            | view()
+            | COMBINE_SAMPLE_DRF_FILES_PROC
 
 
 
@@ -52,19 +57,22 @@ workflow RUN_DRF_WF {
          */
 
         /* Collect all output from RUN_DRF_PROC and group by sample */
-        DRF_output_by_sample = RUN_DRF_PROC.out.low_mapq_beds.collect().flatten()
-                        .map {
-                            sample_file_path ->
-                                // println "sample file path: " + sample_file_path
-                                // println "sample file path name: " + sample_file_path.name
-                                sample_name = sample_file_path.name.substring(0, sample_file_path.name.indexOf('.'))
-                                tuple(
-                                        sample_name, sample_file_path
-                                     )
-                        }
-                        .groupTuple()
+//        DRF_output_by_sample = RUN_DRF_PROC.out.low_mapq_beds.collect().flatten()
+//                        .map {
+//                            sample_file_path ->
+//                                // println "sample file path: " + sample_file_path
+//                                // println "sample file path name: " + sample_file_path.name
+//                                sample_name = sample_file_path.name.substring(0, sample_file_path.name.indexOf('.'))
+//                                tuple(
+//                                        sample_name, sample_file_path
+//                                     )
+//                        }
+//                        .groupTuple()
 
-        COMBINE_SAMPLE_DRF_FILES_PROC(align_to_ref, DRF_output_by_sample)
+//        COMBINE_SAMPLE_DRF_FILES_PROC(DRF_output_by_sample)
+
+    emit:
+        COMBINE_SAMPLE_DRF_FILES_PROC.out
 
 }
 
@@ -74,29 +82,26 @@ workflow RUN_DRF_WF {
  * Run DRF for a given sample and interval
  */
 process RUN_DRF_PROC {
-	
-    /*
-     * Publish results. 'mode: copy' will copy the files into the publishDir
-     * rather than only making links.
-     */
-    // publishDir("${params.results_dir}/02-RUN_DRF", mode: 'copy')
 
+
+    tag { "${sample_name}:${sample_input_file}" }
+	
 	label 'RUN_DRF'
 
 	input:
-        tuple path(sample_input_file), val(interval)
-//        path(sample_input_file)
-//        val(interval)
-        val(align_to_ref)
-        path(DRF_jar)
+        tuple val(sample_name), path(sample_input_file), val(interval)
 
 	output:
-		path '**/*.dark.low_mapq*.bed*.gz', emit: low_mapq_beds
-		// path '*_mini_beds/', emit: low_mapq_bed_dir
+		tuple val(sample_name), path("**/${sample_name}*.dark.low_mapq*.bed*.gz"), emit: low_mapq_beds
 
 	script:
 	"""
-	bash run_DRF.sh ${sample_input_file} ${align_to_ref} ${DRF_jar} ${interval}
+	bash run_DRF.sh \\
+        ${sample_name} \\
+        ${sample_input_file} \\
+        ${params.align_to_ref} \\
+        ${params.DRF_jar} \\
+        ${interval}
 	"""
 }
 
@@ -107,20 +112,18 @@ process RUN_DRF_PROC {
  */
 process COMBINE_SAMPLE_DRF_FILES_PROC {
 
+    tag { "${sample_name}" }
+
     publishDir("${params.results_dir}/02-RUN_DRF", mode: 'copy')
 
     label 'local'
 
     input:
-        val(align_to_ref)
-
         /* A collection of samples to be staged in current work dir */
-        // path(sample_low_mapq_beds)
-
         tuple val(sample_name), path(sample_low_mapq_beds)
 
     output:
-        path '*final.bed.gz', emit: combined_sample_low_mapq_bed
+        tuple val(sample_name), path('*final.bed.gz')
 
     script:
 
@@ -133,7 +136,10 @@ process COMBINE_SAMPLE_DRF_FILES_PROC {
 
     
     """
-    combine_DRF_sample_output.py $align_to_ref \$PWD $combined_output_file_name
+    combine_DRF_sample_output.py \\
+        $params.align_to_ref \\
+        \$PWD \\
+        $combined_output_file_name
     """
 }
 

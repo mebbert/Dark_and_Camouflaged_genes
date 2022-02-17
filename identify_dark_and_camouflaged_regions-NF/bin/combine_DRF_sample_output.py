@@ -30,7 +30,7 @@ def concatenate_DRF_files(file_genomic_regions, combined_out_file):
     for i, row in enumerate(file_genomic_regions):
         in_filename = row[0]
 
-        print "Concatenating " + in_filename + " to " + combined_out_file
+        print("Concatenating " + in_filename + " to " + combined_out_file)
 
         # Throw out the header for all but the first file
         if i != 0:
@@ -39,7 +39,7 @@ def concatenate_DRF_files(file_genomic_regions, combined_out_file):
         else:
             command = ' '.join(['cp', in_filename, combined_out_file])
 
-        print "Command: " + command
+        print("Command: " + command)
         subprocess.call(command, shell=True)
 
 
@@ -58,8 +58,8 @@ def main(hg_ref, sample_low_mapq_bed_dir, combined_out_file):
         if not filename.endswith(".gz"):
             continue
 
-        print "Opening file as gzip: " + abs_path
-        f = gzip.open(abs_path, "r")
+        print("Opening file as gzip: " + abs_path)
+        f = gzip.open(abs_path, "rt")
 
         # read two lines
         line = f.readline()
@@ -73,7 +73,7 @@ def main(hg_ref, sample_low_mapq_bed_dir, combined_out_file):
 
         toks = line.strip().split('\t')
         contig = toks[0]
-        start = long(toks[1])
+        start = int(toks[1])
 
         # Store:
         #  1. file name
@@ -87,8 +87,8 @@ def main(hg_ref, sample_low_mapq_bed_dir, combined_out_file):
     # concatenate the files.
     file_genomic_regions.sort(key = lambda row: (row[1], row[2]))
 
-    for region in file_genomic_regions:
-        print region
+#    for region in file_genomic_regions:
+#        print(region)
 
     concatenate_DRF_files(file_genomic_regions, combined_out_file)
     

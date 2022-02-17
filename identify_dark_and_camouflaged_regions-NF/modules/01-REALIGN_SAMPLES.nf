@@ -10,8 +10,8 @@ nextflow.enable.dsl=2
  * Nextflow. It was converted by @Steve on bioinformatics.stackexchange.com:
  * https://bioinformatics.stackexchange.com/questions/18549/nextflow-dsl-v2-how-to-best-synchronize-multiple-outputs-from-a-single-proces/18566#18566
  *
- * I (Mark Ebbert) have modified the code a bit to handle .cram files and change
- * naming conventions.
+ * @Steve has been a huge help. I (Mark Ebbert) modified the code a bit to handle
+ * .cram files and change naming conventions.
  */
 
 
@@ -34,22 +34,44 @@ workflow REALIGN_SAMPLES_WF {
         | map { tuple( it.baseName, it ) }
         | set { sample_input_files }
 
+    /*
+     * Get headers for all input (b|cr)am files
+     */
     samtools_view_header_proc( sample_input_files )
 
+    /*
+     * Steps will do as follows to prepare for re-alignment:
+     *   1. samtools_collate_and_fastq_proc: collate the input (b|cr)am files
+     *      and convert to a single, interleaved .fastq file
+     *   2. split_fastq_proc: split the single .fastq file into chunks of
+     *      'params.reads_per_run' reads for BWA alignment
+     *   3. map: create tuples of sample_name, the number of .fastqs generated
+     *      for the given sample, and the actual .fastq files.
+     *   4. transpose: transposes the set of tuples
+     *   5. combine: adds the header files to the tuples
+     *   6. set: creates an output channel of the tuples
+     */
     sample_input_files
         | samtools_collate_and_fastq_proc
         | split_fastq_proc
         | map { sample_name, fastq_files ->
             tuple( groupKey(sample_name, fastq_files.size()), fastq_files )
         }
-        | view()
         | transpose()
-        | view()
         | combine( samtools_view_header_proc.out, by: 0 )
-        | view()
-        | set { realignment_inputs }
+        | set { realignment_inputs_ch }
 
-     bwa_mem_proc( realignment_inputs )
+
+     /*
+      * Steps will do as follows for re-alignment:
+      *   1. bwa_mem_proc: Re-align the mini .fastq files using BWA MEM
+      *   2. samtools_coordinate_sort_proc: sort the individual mini .(b|cr)am files
+      *      generated from BWA MEM
+      *   3. groupTuple: group mini .(b|cr)am files by sample name
+      *   4. map: creates tuples of sample_name and the mini .(b|cr)am files
+      *   5. samtools_merge_proc: merge all of the mini .(b|cr)am files
+      */
+     bwa_mem_proc( realignment_inputs_ch )
          | samtools_coordinate_sort_proc
          | groupTuple()
          | map { sample_name, bam_files ->
@@ -57,6 +79,9 @@ workflow REALIGN_SAMPLES_WF {
          }
          | samtools_merge_proc
          | view()
+
+    emit:
+        samtools_merge_proc.out
 }
 
 process samtools_view_header_proc {
@@ -93,12 +118,15 @@ process samtools_name_sort_proc {
     tuple val(sample_name), path("${bam.baseName}.nsorted.bam")
 
     script:
+
+    def additional_threads = task.cpus - 1
+
     def avail_mem = task.memory ? task.memory.toGiga().intdiv(task.cpus) : 0
     def mem_per_thread = avail_mem ? "-m ${avail_mem}G" : ''
 
     """
     samtools sort \\
-        -@ "${task.cpus - 1}" \\
+        -@ "${additional_threads}" \\
         ${mem_per_thread} \\
         -n \\
         -o "${bam.baseName}.nsorted.bam" \\
@@ -119,9 +147,13 @@ process samtools_collate_and_fastq_proc {
     output:
     tuple val(sample_name), path("${sample_name}.interleaved_R1_R2.fastq.gz")
 
+    script:
+
+    def additional_threads = task.cpus - 1
+    
     """
     samtools collate \\
-        -@ "${task.cpus - 1}" \\
+        -@ "${additional_threads}" \\
         -O \\
         -f \\
         "${bam}" \\
@@ -229,16 +261,19 @@ process samtools_coordinate_sort_proc {
     tuple val(sample_name), path(bam)
 
     output:
-    tuple val(sample_name), path("${bam.baseName}.csorted.bam")
+    tuple val(sample_name), path("${bam.baseName}.csorted.{bam,cram}")
 
     script:
+
+    def additional_threads = task.cpus - 1
+
     def avail_mem = task.memory ? task.memory.toGiga().intdiv(task.cpus) : 0
     def mem_per_thread = avail_mem ? "${avail_mem}G" : ''
 
     """
     if [ "$params.output_format" = "bam" ]; then
         samtools sort \\
-            -@ "${task.cpus - 1}" \\
+            -@ "${additional_threads}" \\
             -m ${mem_per_thread} \\
             -o "${bam.baseName}.csorted.bam" \\
             -T "${bam.baseName}.csorted" \\
@@ -246,7 +281,7 @@ process samtools_coordinate_sort_proc {
             "${bam}"
     else
         samtools sort \\
-            -@ "${task.cpus - 1}" \\
+            -@ "${additional_threads}" \\
             -m ${mem_per_thread} \\
             -o "${bam.baseName}.csorted.bam" \\
             -T "${bam.baseName}.csorted" \\
@@ -260,6 +295,12 @@ process samtools_coordinate_sort_proc {
 
 process samtools_merge_proc {
 
+    /*
+     * Publish results. 'mode: copy' will copy the files into the publishDir
+     * rather than only making links.
+     */
+    publishDir("${params.results_dir}/01-REALIGN_SAMPLES", mode: 'copy')
+
     tag { sample_name }
 
     label 'samtools_merge_proc'
@@ -268,16 +309,25 @@ process samtools_merge_proc {
     tuple val(sample_name), path(bams)
 
     output:
-    tuple val(sample_name), path("${sample_name}.bam{,.bai}")
+    tuple val(sample_name), path("${sample_name}*.sorted.merged.final.{bam,cram}{,.bai}")
 
     """
-    samtools merge \\
-        -c \\
-        -p \\
-        "${sample_name}.bam" \\
-        ${bams}
-    samtools index \\
-        "${sample_name}.bam"
+    if [ "$params.output_format" = "bam" ]; then
+        samtools merge \\
+            -c \\
+            -p \\
+            "${sample_name}.${params.align_to_ref_tag}.sorted.merged.final.bam" \\
+            --write-index \\
+            ${bams}
+    else
+        samtools merge \\
+            -c \\
+            -p \\
+            -O cram \\
+            "${sample_name}.${params.align_to_ref_tag}.sorted.merged.final.cram" \\
+            --write-index \\
+            ${bams}
+    fi
     """
 }
 

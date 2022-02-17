@@ -89,7 +89,7 @@ params.sample_input_tag = "Test_samples"
  * returned, rather than reporting the size of the list of files, which is what is expected.
  * Nextflow channels seem inherently buggy to me.
  */
-params.reads_per_run = 100_000
+params.reads_per_run = 100_000_000
 
 /*
  * Specifies the final output format for re-aligned samples. Can be either '.bam' or '.cram' (w/ or
@@ -130,6 +130,11 @@ params.results_dir = "./results/${params.align_to_ref_tag}_${params.sequencer_ta
  */
 params.mask_ref_prefix = 'hg38_camo_mask'
 
+/*
+ * Defines the size of intervals to break the align_to_ref into for
+ * running/parallelizing DRF.
+ */
+params.DRF_interval_length = 150_000_000
 
 /*
  * Specify where the DRF jar file can be found
@@ -166,25 +171,6 @@ include {MASK_GENOME_PROC} from './modules/06-MASK_GENOME.nf'
 
 
 
-
-/*
- * Collect sample sam/bam/cram files from file input channel
- */
-def collect_sample_files( input_dir ) {
-
-    /*
-     * Only accept sam/bam/cram
-     */ 
-    def pattern = ~/.*(\.sam|\.bam|\.cram)/
-    def results = []
-
-    input_dir.eachFileMatch(pattern) { item ->
-        results.add( item )
-    }
-
-    return results
-}
-
 def calculate_ref_genome_size( ref ) {
     def ref_faidx = file("${ref}.fai")
     // println "faidx: ${ref_faidx}"
@@ -207,64 +193,10 @@ def calculate_ref_genome_size( ref ) {
     return total_length
 }
 
-def create_intervals( ref, interval_length ) {
-    
-    def ref_faidx = file("${ref}.fai")
-    def tmp_interval, remaining_contig_length, intervals = []
-    ref_faidx.withReader { reader ->
-        while ((line = reader.readLine()) != null) {
-            // println "#################"
-            // println "${line}"
-            toks = line.split("\t")
-            contig = toks[0]
-            contig_length = toks[1].toInteger()
-
-            remaining_contig_length = contig_length
-
-            /*
-             * Split contig into intervals of size 'interval_length'
-             */
-            // println "Intervals:"
-            while (remaining_contig_length > 0) {
-                
-                /*
-                 * 0-based start & end
-                 */
-                start = 0 + (contig_length - remaining_contig_length)
-
-                if( remaining_contig_length < interval_length ) {
-                    end = contig_length
-                }
-                else {
-                    end = start + interval_length
-                }
-                tmp_interval = "${contig}:${start}-${end}"
-                // println tmp_interval
-                intervals.add(tmp_interval)
-
-                remaining_contig_length -= interval_length
-            }
-            // println ""
-        }
-    }
-
-    return intervals
-
-}
 
 
 workflow{
 
-
-
-    /*
-     * Create channel from the path provided, allowing only sam/bam/cram files.
-     */
-    // input_sample_path = file( params.input_sample_path )
-    // input_sample_path = file( "${projectDir}/test_data/ADSP_sample_crams/*.cram" )
-    // input_sample_path = file( "${projectDir}/test_data/ADSP_sample_crams/A-CUHS-CU003023-test.cram" )
-//    input_sample_file_ch = Channel.fromPath(input_sample_path, checkIfExists: true)
-//                        .filter( ~/.*(\.sam|\.bam|\.cram)/ )
 
     /*
      * Prefix for various output files.
@@ -274,68 +206,48 @@ workflow{
     /*
      * Realign input sample files
      */
-//	REALIGN_SAMPLES_PROC(input_sample_file_ch, align_to_ref, align_to_ref_tag, original_ref,
-//                     output_format)
-// 	REALIGN_SAMPLES_WF(input_sample_file_ch, reads_per_job, original_ref, align_to_ref, align_to_ref_tag,
-//                        output_format)
 	REALIGN_SAMPLES_WF(params.input_sample_path)
 
     /*
      * Run 'Dark Region Finder' to create summary statistics for every position in the
-     * 'align_to_ref'. This process is run  split into a different process for each input sample
-     * file.
-     *
-     * DRF is begging to be parallelized, but we haven't done that. Very slow as it is.
+     * 'align_to_ref'. This process is split into a different process for each input sample
+     * file and genome intervals of size 'params.DRF_interval_length'.
      */
+    REALIGN_SAMPLES_WF.out.view()
+ 	RUN_DRF_WF(REALIGN_SAMPLES_WF.out, params.DRF_interval_length)
 
-    /* Determine total length of genome */
-//    align_to_ref_length = calculate_ref_genome_size( align_to_ref )
-//    n_DRF_jobs = 400
-//    interval_length = align_to_ref_length.intdiv(n_DRF_jobs)
 
-    // println "interval length: ${interval_length}"
-    // intervals = Channel.from( create_intervals( align_to_ref, interval_length ) )
-
-    interval_length = 150000000
-
- 	// RUN_DRF(REALIGN_SAMPLES.out.final_alignment, align_to_ref, DRF_jar, intervals)
- 	// RUN_DRF("${projectDir}/./results/Ensembl_GRCh38_release_93_illuminaRL100_Original_ADSP_samples-2022_02_03-18.07.32/REALIGN_SAMPLES/A-CUHS-CU000208-BL-COL-56227BL1.Ensembl_GRCh38_release_93.bam", align_to_ref, DRF_jar, intervals)
- 	// RUN_DRF_WF("${projectDir}/./results/Ensembl_GRCh38_release_93_illuminaRL100_Original_ADSP_samples-2022_02_03-18.07.32/REALIGN_SAMPLES/A-CUHS-CU000208-BL-COL-56227BL1.Ensembl_GRCh38_release_93.bam", align_to_ref, DRF_jar, interval_length)
-
-    // samples_ch = Channel.fromPath("${projectDir}/./results/Ensembl_GRCh38_release_93_illuminaRL100_Original_ADSP_samples-2022_02_03-18.07.32/REALIGN_SAMPLES/*.bam")
- 	// RUN_DRF_WF(samples_ch, align_to_ref, DRF_jar, interval_length)
-
-// 
-//     /*
-//      * Combine DRF output from all samples while also separating the DRF results into separate .bed
-//      * files for 'dark-by-depth' and 'dark-by-MAPQ'. This w across all samples run previously. The
-//      * string passed in is used for naming final results output.
-//      */
-// 	COMBINE_DRF_OUTPUT_PROC(RUN_DRF.out.low_mapq_bed.collect(), file_prefix)
-// 
-//     /*
-//      * Calculate bam/cram metrics
-//      */
-// //	step_03_CALC_BAM_METRIC()
-// 
-//     /*
-//      * Prepare the input annotation .gff3 file for use with defining camouflaged regions.
-//      */
-// 	PREPARE_ANNOTATION_BED_PROC(align_to_gff)
-// 
-//     /*
-//      * Create final output files defining 'dark' and 'camouflaged' regions, along with various
-//      * statistics.
-//      */
-// 	CREATE_BED_FILE_PROC(COMBINE_DRF_OUTPUT.out.low_depth_out,
-//                      COMBINE_DRF_OUTPUT.out.low_mapq_out, align_to_ref, 
-//                      PREPARE_ANNOTATION_BED.out.prepped_anno_bed, sequencer_tag,
-//                      align_to_ref_tag)
-// 
-//     /*
-//      * Mask the 'align_to_ref' for use in rescuing camouflaged variants from camouflaged regions in
-//      * existing short-read sequencing data sets.
-//      */
-//  MASK_GENOME_PROC(CREATE_BED_FILE.out.align_to_bed, align_to_ref, file_prefix)
+ 
+    /*
+     * Combine DRF output from all samples while also separating the DRF results into separate .bed
+     * files for 'dark-by-depth' and 'dark-by-MAPQ'. This will combine across all samples run previously. The
+     * string passed in is used for naming final results output.
+     */
+    COMBINE_DRF_OUTPUT_PROC(RUN_DRF.out.low_mapq_bed.collect(), file_prefix)
+ 
+    /*
+     * Calculate bam/cram metrics
+     */
+ //	step_03_CALC_BAM_METRIC()
+ 
+    /*
+     * Prepare the input annotation .gff3 file for use with defining camouflaged regions.
+     */
+ 	PREPARE_ANNOTATION_BED_PROC(align_to_gff)
+ 
+    /*
+     * Create final output files defining 'dark' and 'camouflaged' regions, along with various
+     * statistics.
+     */
+ 	CREATE_BED_FILE_PROC(COMBINE_DRF_OUTPUT.out.low_depth_out,
+                      COMBINE_DRF_OUTPUT.out.low_mapq_out, align_to_ref, 
+                      PREPARE_ANNOTATION_BED.out.prepped_anno_bed, sequencer_tag,
+                      align_to_ref_tag)
+ 
+    /*
+     * Mask the 'align_to_ref' for use in rescuing camouflaged variants from camouflaged regions in
+     * existing short-read sequencing data sets.
+     */
+    MASK_GENOME_PROC(CREATE_BED_FILE.out.align_to_bed, align_to_ref, file_prefix)
 
 }
