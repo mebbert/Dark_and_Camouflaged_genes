@@ -50,6 +50,19 @@ workflow REALIGN_SAMPLES_WF {
      *   4. transpose: transposes the set of tuples
      *   5. combine: adds the header files to the tuples
      *   6. set: creates an output channel of the tuples
+     *
+     *
+     * NOTE: If 'params.reads_per_run' results in a single .fastq file for a
+     * given sample, Nextflow will error out with something like the following:
+     * "Invalid method invocation `groupKey` with arguments: <sample_name>
+     *    (java.lang.String), 26766997 (java.lang.Long) on Nextflow type"
+     *
+     * This error happens because `fastq_files.size()` returns the file size for the single file
+     * returned rather than reporting the size of the list of files. We expect.
+     * a *list* of files. Nextflow channels seem inherently buggy to me.
+     *
+     * To 'fix' it, reduce params.reads_per_run to a number less than the number
+     * of paired-end reads
      */
     sample_input_files
         | samtools_collate_and_fastq_proc
@@ -182,7 +195,18 @@ process split_fastq_proc {
     tuple val(sample_name), path("${sample_name}.interleaved_R1_R2.split_${/[0-9]/*5}.fastq.gz")
 
     """
-    split_fastq.py $sample_name $fastq $params.reads_per_run
+    lines_per_read=4
+
+    zcat "${fastq}" \\
+    | \\
+    split \\
+    --suffix-length=5 \\
+    --additional-suffix=".fastq" \\
+    --filter='gzip > \$FILE.gz' \\
+    -d \\
+    -l "${params.reads_per_run * lines_per_read}" \\
+    - \\
+    "${sample_name}.interleaved_R1_R2.split_"
     """
 }
 

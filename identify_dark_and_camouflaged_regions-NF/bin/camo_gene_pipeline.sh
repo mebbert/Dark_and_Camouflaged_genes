@@ -142,7 +142,11 @@ mapq_not_camo="${SEQUENCER}.${GVERS}.low_mapq.NOT_camo.bed"
 # Merge coordinates for depth bed, removing regions that are less than 20bp long #
 ##################################################################################
 # Swallow 141 (SIGPIPE) because remove_unassembled_contigs.py closes pipe abruptly.
-time bedtools merge -d 20 -c 5 -o mean,median -i $DEPTH_BED | \
+# Bedtools is supposed to auto-detect .gz files. Version 2.30.0 has a bug passing
+# a .gz directly, so we are zcat-ing it into Bedtools. The issue has been fixed in
+# `master`, but we're still using 2.30.0. See the following link for details:
+# https://github.com/arq5x/bedtools2/issues/975
+time zcat $DEPTH_BED | bedtools merge -d 20 -c 5 -o mean,median -i stdin | \
 	remove_unassembled_contigs.py | \
 	awk '{ if($3 - $2 > 20) print $0}' \
 	> $depth_merged \
@@ -150,18 +154,18 @@ time bedtools merge -d 20 -c 5 -o mean,median -i $DEPTH_BED | \
 			true
 		else
 			echo "ERROR (`date`): Failed to merge coordinates for $DEPTH_BED. See log for details."
-			exit $?
+			exit 1
 		fi
 
 
 # Check if the exit status for every cmd in the pipe were successful.
 # Cannot simply use 'if ! <cmd>' if piping multiple cmds together. The environment
 # variable $PIPESTATUS stores the status for all cmds in the pipe.
-# TMPSTATUS=("${PIPESTATUS[@]}")
-# if pipe_failed "${TMPSTATUS[@]}"; then
-# 	echo "ERROR (`date`): Failed to merge coordinates for $DEPTH_BED. See log for details."
-# 	exit $?
-# fi
+TMPSTATUS=("${PIPESTATUS[@]}")
+#if pipe_failed "${TMPSTATUS[@]}"; then
+#	echo "ERROR (`date`): Failed to merge coordinates for $DEPTH_BED. See log for details."
+#	exit $?
+#fi
 	
 
 
@@ -169,7 +173,7 @@ time bedtools merge -d 20 -c 5 -o mean,median -i $DEPTH_BED | \
 # Merge coordinates for mapq bed, removing regions that are less than 20bp long #
 #################################################################################
 # Swallow 141 (SIGPIPE) because remove_unassembled_contigs.py closes pipe abruptly.
-time bedtools merge -d 20 -c 5 -o mean,median -i $MAPQ_BED | \
+time zcat $MAPQ_BED | bedtools merge -d 20 -c 5 -o mean,median -i stdin | \
 	remove_unassembled_contigs.py | \
 	awk '{ if($3 - $2 > 20) print $0}' \
 	> $mapq_merged \
@@ -177,22 +181,22 @@ time bedtools merge -d 20 -c 5 -o mean,median -i $MAPQ_BED | \
 			true
 		else
 			echo "ERROR (`date`): Failed to merge coordinates for $MAPQ_BED. See log for details."
-			exit $?
+			exit 1
 		fi
 
 
-# TMPSTATUS=("${PIPESTATUS[@]}")
-# if pipe_failed "${TMPSTATUS[@]}"; then
-# 	echo "ERROR (`date`): Failed to merge coordinates for $MAPQ_BED. See log for details."
-# 	exit $?
-# fi
+TMPSTATUS=("${PIPESTATUS[@]}")
+#if pipe_failed "${TMPSTATUS[@]}"; then
+#	echo "ERROR (`date`): Failed to merge coordinates for $MAPQ_BED. See log for details."
+#	exit 1
+#fi
 
 
 # Printing the lengths of each mapq region to a file
 echo -e "region_id\tchrom\tlength" >> $mapq_lengths
 if ! awk '{n +=1; print n,$1,($3 - $2)}' $mapq_merged >> $mapq_lengths; then
 	echo "ERROR: `date` awk failed for $mapq_merged"
-	exit $?
+	exit 1
 fi
 
 
@@ -205,7 +209,7 @@ cat $mapq_merged $depth_merged | \
 	> $dark_merged \
 	|| {
 			echo "ERROR (`date`): Failed to merge dark-by-MAPQ and dark-by-depth. See log for details."
-			exit $?
+			exit 1
 		}
 
 # TMPSTATUS=("${PIPESTATUS[@]}")
@@ -227,7 +231,7 @@ bedtools intersect \
 		> $dark_annotations \
 	|| {
 			echo "ERROR (`date`): Failed to intersect all dark regions with gene annotation bed. See log for details."
-			exit $?
+			exit 1
 		}
 
 
@@ -316,6 +320,7 @@ cat $mapq_annotations | \
 
 
 
+# Run BLAT
 nLines=$(wc -l $query | awk '{print $1}')
 stepSize=$(($nLines / $NUM_THREADS))
 if [[ $(($stepSize % 2 )) == 1 ]]

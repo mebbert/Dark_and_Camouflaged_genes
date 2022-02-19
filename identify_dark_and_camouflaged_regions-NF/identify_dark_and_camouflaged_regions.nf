@@ -67,19 +67,20 @@ params.align_to_ref_tag = 'Ensembl_GRCh38_release_93'
  * /path/to/folder/<specific_file>.bam, etc.). The input will be limited to .sam, .bam, and .cram
  * files before proceeding.
  */
-params.input_sample_path = "${projectDir}/test_data/ADSP_sample_crams/*"
+// params.input_sample_path = "${projectDir}/test_data/ADSP_sample_crams/*"
 // params.input_sample_path = file( "${projectDir}/test_data/ADSP_sample_crams/A-CUHS-CU003023-test.cram" )
-// params.input_sample_path = "${projectDir}/original_ADSP_samples/*.cram"
+params.input_sample_path = "${projectDir}/original_ADSP_samples/*.cram"
 
 /*
  * This string can be used to help name the results folder (if provided and included when defining
  * the results parameter. 
  */
-params.sample_input_tag = "Test_samples"
-// params.sample_input_tag = "Original_ADSP_samples"
+// params.sample_input_tag = "Test_samples"
+params.sample_input_tag = "Original_ADSP_samples"
 
 /*
- * Defines the number of reads per BWA alignment job.
+ * Defines the number of reads per BWA alignment job. This number must be
+ * divisible by 4 because reads in a .fastq file use 4 lines.
  *
  * NOTE: If this number results in a single .fastq file for the sample, Nextflow
  * will error out with something like the following:
@@ -89,7 +90,8 @@ params.sample_input_tag = "Test_samples"
  * returned, rather than reporting the size of the list of files, which is what is expected.
  * Nextflow channels seem inherently buggy to me.
  */
-params.reads_per_run = 100_000_000
+// params.reads_per_run = 100_000
+params.reads_per_run = 50_000_000
 
 /*
  * Specifies the final output format for re-aligned samples. Can be either '.bam' or '.cram' (w/ or
@@ -128,13 +130,18 @@ params.results_dir = "./results/${params.align_to_ref_tag}_${params.sequencer_ta
 /*
  * Prefix for masked reference files.
  */
-params.mask_ref_prefix = 'hg38_camo_mask'
+params.mask_ref_prefix = params.align_to_ref_tag
 
 /*
  * Defines the size of intervals to break the align_to_ref into for
  * running/parallelizing DRF.
+ *
+ * A DRF interval length of 10_000_000 will create nearly 500 jobs *per sample*
+ * for the human genome (assuming small contigs are included). Small, unplaced
+ * contigs and HLA haplotypes make up nearly 200 of the ~500. This is based on
+ * the reference the input samples were originally aligned to ('original_ref').
  */
-params.DRF_interval_length = 150_000_000
+params.DRF_interval_length = 5_000_000
 
 /*
  * Specify where the DRF jar file can be found
@@ -158,6 +165,7 @@ log.info """\
  mask_ref_prefix                : ${params.mask_ref_prefix}
  """
 
+
 /*
  * Import Modules
  */
@@ -171,32 +179,16 @@ include {MASK_GENOME_PROC} from './modules/06-MASK_GENOME.nf'
 
 
 
-def calculate_ref_genome_size( ref ) {
-    def ref_faidx = file("${ref}.fai")
-    // println "faidx: ${ref_faidx}"
-    def line, contig_length
-    def long total_length = 0
-    def String[] toks
-    ref_faidx.withReader { reader ->
-        while ((line = reader.readLine()) != null) {
-            // println "#########"
-            // println "${line}"
-            toks = line.split("\t")
-            contig_length = toks[1].toInteger()
-            total_length += contig_length
-
-            // println "Contig length: ${contig_length}"
-            // println "Cumulative length: ${total_length}"
-            // println ""
-        }
-    }
-    return total_length
-}
-
-
-
+/*
+ * Let the magic begin.
+ */
 workflow{
 
+    /* test that params.reads_per_run is divisible by 4 */
+    if(params.reads_per_run  % 4 != 0){
+        throw Exception("ERROR: reads_per_run must be divisible by 4. Please" +
+            " specify a number that is divisible by 4.")
+    }
 
     /*
      * Prefix for various output files.
@@ -204,50 +196,48 @@ workflow{
     file_prefix = "${params.sequencer_tag}.${params.align_to_ref_tag}"
 
     /*
-     * Realign input sample files
+     * Step 01: Realign input sample files
      */
 	REALIGN_SAMPLES_WF(params.input_sample_path)
 
     /*
-     * Run 'Dark Region Finder' to create summary statistics for every position in the
-     * 'align_to_ref'. This process is split into a different process for each input sample
-     * file and genome intervals of size 'params.DRF_interval_length'.
+     * Step 02: Run 'Dark Region Finder' to create summary statistics for every
+     * position in the 'align_to_ref'. This process is split into a different
+     * process for each input sample file and genome intervals of size
+     * 'params.DRF_interval_length'.
      */
     REALIGN_SAMPLES_WF.out.view()
  	RUN_DRF_WF(REALIGN_SAMPLES_WF.out, params.DRF_interval_length)
+ 
 
+    /*
+     * Step 03: Combine DRF output from all samples while also separating the
+     * DRF results into separate .bed files for 'dark-by-depth' and
+     * 'dark-by-MAPQ'. This will combine across all samples run previously.
+     * The string passed in is used for naming final results output.
+     */
+    COMBINE_DRF_OUTPUT_PROC(RUN_DRF_WF.out.collect(), file_prefix)
+ 
 
+    /*
+     * Step 04: Prepare the input annotation .gff3 file for use with defining
+     * camouflaged regions.
+     */
+ 	PREPARE_ANNOTATION_BED_PROC(params.align_to_gff)
  
     /*
-     * Combine DRF output from all samples while also separating the DRF results into separate .bed
-     * files for 'dark-by-depth' and 'dark-by-MAPQ'. This will combine across all samples run previously. The
-     * string passed in is used for naming final results output.
+     * Step 05: Create final output files defining 'dark' and 'camouflaged'
+     * regions, along with various statistics.
      */
-    COMBINE_DRF_OUTPUT_PROC(RUN_DRF.out.low_mapq_bed.collect(), file_prefix)
+ 	CREATE_BED_FILE_PROC(COMBINE_DRF_OUTPUT_PROC.out.low_depth_out,
+                      COMBINE_DRF_OUTPUT_PROC.out.low_mapq_out,
+                      PREPARE_ANNOTATION_BED_PROC.out.prepped_anno_bed)
  
     /*
-     * Calculate bam/cram metrics
+     * Step 06: Mask the 'align_to_ref' for use in rescuing camouflaged
+     * variants from camouflaged regions in existing short-read sequencing data
+     * sets.
      */
- //	step_03_CALC_BAM_METRIC()
- 
-    /*
-     * Prepare the input annotation .gff3 file for use with defining camouflaged regions.
-     */
- 	PREPARE_ANNOTATION_BED_PROC(align_to_gff)
- 
-    /*
-     * Create final output files defining 'dark' and 'camouflaged' regions, along with various
-     * statistics.
-     */
- 	CREATE_BED_FILE_PROC(COMBINE_DRF_OUTPUT.out.low_depth_out,
-                      COMBINE_DRF_OUTPUT.out.low_mapq_out, align_to_ref, 
-                      PREPARE_ANNOTATION_BED.out.prepped_anno_bed, sequencer_tag,
-                      align_to_ref_tag)
- 
-    /*
-     * Mask the 'align_to_ref' for use in rescuing camouflaged variants from camouflaged regions in
-     * existing short-read sequencing data sets.
-     */
-    MASK_GENOME_PROC(CREATE_BED_FILE.out.align_to_bed, align_to_ref, file_prefix)
+    MASK_GENOME_PROC(CREATE_BED_FILE_PROC.out.align_to_bed, file_prefix)
 
 }

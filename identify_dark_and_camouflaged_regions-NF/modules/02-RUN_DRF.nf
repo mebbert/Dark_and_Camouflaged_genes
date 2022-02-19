@@ -25,18 +25,9 @@ workflow RUN_DRF_WF {
          * Create intervals to split DRF jobs across intervals
          */
         // intervals = create_intervals( params.align_to_ref, interval_length )
-        intervals = ['1:10000-20000', '5:55555-66666']
+        intervals = ['1:10000-20000', '1:207496157-207641765', '5:55555-66666', '22:15693544-15720708']
         intervals_ch = Channel.from( intervals )
 
-
-
-        /*
-         * Run DRF on sample for each interval
-         */
-        // sample_files = Channel.fromPath(sample_input_dir + "*.bam")
-        // sample_files = Channel.fromPath(sample_input_dir + "A-CUHS-CU000208-BL-COL-56227BL1.Ensembl_GRCh38_release_93.bam")
-        // sample_files.combine(intervals_ch).set { files_and_intervals }
-        // RUN_DRF_PROC( files_and_intervals)
 
         /*
          * Create cartesian product for samples and inputs so all intervals
@@ -45,31 +36,14 @@ workflow RUN_DRF_WF {
         samples_and_intervals = sample_input_ch
             .combine(intervals_ch)
 
-        RUN_DRF_PROC( samples_and_intervals )
-            | groupTuple(size: intervals.size())
-            | view()
-            | COMBINE_SAMPLE_DRF_FILES_PROC
-
-
 
         /*
-         * Combine sample DRF files
+         * Run DRF and combine sample DRF files
          */
+        RUN_DRF_PROC( samples_and_intervals )
+            | groupTuple(size: intervals.size())
+            | COMBINE_SAMPLE_DRF_FILES_PROC
 
-        /* Collect all output from RUN_DRF_PROC and group by sample */
-//        DRF_output_by_sample = RUN_DRF_PROC.out.low_mapq_beds.collect().flatten()
-//                        .map {
-//                            sample_file_path ->
-//                                // println "sample file path: " + sample_file_path
-//                                // println "sample file path name: " + sample_file_path.name
-//                                sample_name = sample_file_path.name.substring(0, sample_file_path.name.indexOf('.'))
-//                                tuple(
-//                                        sample_name, sample_file_path
-//                                     )
-//                        }
-//                        .groupTuple()
-
-//        COMBINE_SAMPLE_DRF_FILES_PROC(DRF_output_by_sample)
 
     emit:
         COMBINE_SAMPLE_DRF_FILES_PROC.out
@@ -86,7 +60,7 @@ process RUN_DRF_PROC {
 
     tag { "${sample_name}:${sample_input_file}" }
 	
-	label 'RUN_DRF'
+	label 'RUN_DRF_PROC'
 
 	input:
         tuple val(sample_name), path(sample_input_file), val(interval)

@@ -12,15 +12,15 @@ process COMBINE_DRF_OUTPUT_PROC {
      */
     publishDir("${params.results_dir}/03-COMBINE_DRF_OUTPUT", mode: 'copy')
 
-	label 'COMBINE_DRF_OUTPUT'
+	label 'COMBINE_DRF_OUTPUT_PROC'
 
 	input:
-		file(low_mapq_bed_list)
+		tuple val(sample_name), path(low_mapq_bed_list)
 		val(result_prefix)
 
 	output:
-		path '*.dark.low_depth.bed', emit: low_depth_out
-		path '*.dark.low_mapq.bed', emit: low_mapq_out
+		tuple val(sample_name), path('*.dark.low_depth.bed.gz'), emit: low_depth_out
+		tuple val(sample_name), path('*.dark.low_mapq.bed.gz'), emit: low_mapq_out
 
 	script:
 	"""

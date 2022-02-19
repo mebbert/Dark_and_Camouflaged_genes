@@ -6,11 +6,10 @@ process MASK_GENOME_PROC {
      */
     publishDir("${params.results_dir}/06-MASK_GENOME", mode: 'copy')
 	
-	label 'MASK_GENOME'
+	label 'MASK_GENOME_PROC'
 
 	input:
-		path(align_to_bed)
-		val(ref)
+		tuple val(sample_name), path(align_to_bed)
 		val(mask_ref_prefix)
 
 	output:
@@ -20,6 +19,6 @@ process MASK_GENOME_PROC {
 
 	script:
 		"""
-		bash create_camo_mask.sh $align_to_bed $ref $mask_ref_prefix
+		bash create_camo_mask.sh $align_to_bed $params.align_to_ref $mask_ref_prefix
 		"""
 }
