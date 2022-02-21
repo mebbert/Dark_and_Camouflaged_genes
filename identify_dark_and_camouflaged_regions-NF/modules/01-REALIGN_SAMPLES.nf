@@ -196,6 +196,7 @@ process split_fastq_proc {
 
     """
     lines_per_read=4
+    n_lines=\$(($params.reads_per_run * lines_per_read))
 
     zcat "${fastq}" \\
     | \\
@@ -204,7 +205,7 @@ process split_fastq_proc {
     --additional-suffix=".fastq" \\
     --filter='gzip > \$FILE.gz' \\
     -d \\
-    -l "${params.reads_per_run * lines_per_read}" \\
+    -l \$n_lines \\
     - \\
     "${sample_name}.interleaved_R1_R2.split_"
     """
@@ -291,7 +292,11 @@ process samtools_coordinate_sort_proc {
 
     def additional_threads = task.cpus - 1
 
-    def avail_mem = task.memory ? task.memory.toGiga().intdiv(task.cpus) : 0
+    /*
+     * Calculate mem per thread. Multiply total mem by 0.8 to provide a 20%
+     * buffer.
+     */
+    def avail_mem = task.memory ? task.memory.toGiga().intdiv(task.cpus) * 0.8 : 0
     def mem_per_thread = avail_mem ? "${avail_mem}G" : ''
 
     """
