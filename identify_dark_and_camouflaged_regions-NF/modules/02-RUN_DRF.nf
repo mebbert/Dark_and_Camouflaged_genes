@@ -24,8 +24,8 @@ workflow RUN_DRF_WF {
         /*
          * Create intervals to split DRF jobs across intervals
          */
-        // intervals = create_intervals( params.align_to_ref, interval_length )
-        intervals = ['1:10000-20000', '1:207496157-207641765', '5:55555-66666', '22:15693544-15720708']
+        intervals = create_intervals( params.align_to_ref, interval_length )
+        // intervals = ['1:10000-20000', '1:207496157-207641765', '5:55555-66666', '22:15693544-15720708']
         intervals_ch = Channel.from( intervals )
 
 

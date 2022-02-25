@@ -7,10 +7,6 @@ nextflow.enable.dsl=2
  * Pipeline parameter default values, can be modified by user when calling pipeline on command line (e.g. --ref reference.fa) ##
  */
 
-
-/*
- * TODO: Need to set up proper environment (e.g., load java modules automatically).
- */
  
 /*
  * Path to input bams for rescuing camouflaged variants. Must be an absolute
@@ -43,7 +39,7 @@ params.extraction_bed = "${projectDir}/test_data/CR1-extraction-1KG_ref.bed"
  * are the result of 'reference-based artifacts', which we describe in the
  * paper and in notes for the respective NextFlow process.
  */
-params.ref_fasta = "${projectDir}/../references/GRCh38_no_alt_plus_hs38d1/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna"
+params.orig_ref_fasta = "${projectDir}/../references/GRCh38_no_alt_plus_hs38d1/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna"
 
 /*
  * The MASKED reference to be *ALIGNED TO*. If the reference provided here has
@@ -58,7 +54,7 @@ params.masked_ref_fasta = "${projectDir}/results/MASK_GENOME/GCA_000001405.15_GR
  * in the NextFlow process that identifies false positives (a.k.a.
  * reference-based artifacts).
  */
-params.ref_tag = 'NCBI_GRCh38_no_alt_plus_hs38d1_analysis_set'
+params.masked_ref_tag = 'NCBI_GRCh38_no_alt_plus_hs38d1_analysis_set'
 
 /*
  * Path to the .bed file that GATK will use to call variants. This MUST
@@ -71,6 +67,8 @@ params.ref_tag = 'NCBI_GRCh38_no_alt_plus_hs38d1_analysis_set'
  *
  * We provide the appropriate GATK .bed files for the same human reference
  * genomes as the extraction_bed.
+ *
+ * TODO: all camo or just CDS? Was previously only CDS.
  */
 params.gatk_bed = "${projectDir}/test_data/CR1-GATK-1KG_ref.bed"
 
@@ -79,7 +77,7 @@ params.gatk_bed = "${projectDir}/test_data/CR1-GATK-1KG_ref.bed"
  * regions in the NextFlow process that identifies false-positive variants.
  * This .bed file comes from the `CREATE_BED_FILE` process in the
  * `Identify Dark and Camouflaged Regions` NextFlow workflow. This .bed file
- * must be specific to the reference genome being used in the `ref_fasta`
+ * must be specific to the reference genome being used in the `orig_ref_fasta`
  * argument.
  */
 params.align_to_bed = "${projectDir}/test_data/illuminaRL100.hg38.camo.align_to.sorted.bed"
@@ -121,9 +119,9 @@ params.clean_tmp_files = false
 log.info """\
  RESCUE CAMO VARIANTS PIPELINE
  ==========================================
- cram reference         : ${params.cram_ref}
- crams                  : ${params.crams}
- ref_tag                : ${params.ref_tag}
+ cram reference                : ${params.cram_ref}
+ crams                         : ${params.crams}
+ masked_ref_tag                : ${params.masked_ref_tag}
  """
 
 /*
@@ -133,28 +131,9 @@ include {MASK_GENOME} from './modules/MASK_GENOME.nf'
 include {RESCUE_CAMO_VARS_WF} from './modules/RESCUE_CAMO_VARS_PROCS.nf'
 
 
-/*
- * Define initial files and channels
- */
-bam_path = params.bam_path
-extraction_bed = file(params.extraction_bed)
-ref_fasta = params.ref_fasta
-masked_ref_fasta = params.masked_ref_fasta
-gatk_bed = file(params.gatk_bed)
-n_samples_per_batch = params.n_samples_per_batch
-max_repeats_to_rescue = params.max_repeats_to_rescue
-ref_tag = params.ref_tag
-
 workflow{
-/*
-    MASK_GENOME("${projectDir}/test_data/illuminaRL100.hg38.camo.align_to.sorted.bed",
-            "${projectDir}/../references/GRCh38_no_alt_plus_hs38d1/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna",
-            "${projectDir}/../references/GRCh38_no_alt_plus_hs38d1/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.fai",
-            'GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna')
-*/
 
-    RESCUE_CAMO_VARS_WF(bam_path, extraction_bed, ref_fasta, masked_ref_fasta,
-                        gatk_bed, n_samples_per_batch, max_repeats_to_rescue,
-                        camo_annotations, align_to_bed, ref_tag)
+    RESCUE_CAMO_VARS_WF()
+
 }
 

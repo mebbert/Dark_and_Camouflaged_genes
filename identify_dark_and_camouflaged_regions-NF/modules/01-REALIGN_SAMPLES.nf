@@ -99,7 +99,7 @@ workflow REALIGN_SAMPLES_WF {
 
 process samtools_view_header_proc {
 
-    tag { "${sample_name}:${bam.name}" }
+    tag { "${sample_name}" }
 
     label 'local'
 
@@ -119,7 +119,7 @@ process samtools_view_header_proc {
 
 process samtools_name_sort_proc {
 
-    tag { "${sample_name}:${bam.name}" }
+    tag { "${sample_name}" }
 
     cpus 4
     memory 8.GB
@@ -150,7 +150,7 @@ process samtools_name_sort_proc {
 
 process samtools_collate_and_fastq_proc {
 
-    tag { "${sample_name}:${bam.name}" }
+    tag { "${sample_name}" }
 
     label 'samtools_collate_and_fastq_proc'
 
@@ -184,7 +184,7 @@ process samtools_collate_and_fastq_proc {
 
 process split_fastq_proc {
 
-    tag { "${sample_name}:${fastq.name}" }
+    tag { "${sample_name}" }
 
     label 'split_fastq_proc'
 
@@ -294,12 +294,14 @@ process samtools_coordinate_sort_proc {
 
     /*
      * Calculate mem per thread. Multiply total mem by 0.8 to provide a 20%
-     * buffer.
+     * buffer. Multiply by 1024 to convert to MB
      */
-    def avail_mem = task.memory ? task.memory.toGiga().intdiv(task.cpus) * 0.8 : 0
-    def mem_per_thread = avail_mem ? "${avail_mem}G" : ''
+    def avail_mem = task.memory ? ( task.memory.toGiga() * 0.8 * 1024 ).toInteger().intdiv(task.cpus) : 0
+    def mem_per_thread = avail_mem ? "${avail_mem}M" : ''
 
     """
+    echo "Available mem: $avail_mem"
+    echo "Mem per thread: $mem_per_thread"
     if [ "$params.output_format" = "bam" ]; then
         samtools sort \\
             -@ "${additional_threads}" \\

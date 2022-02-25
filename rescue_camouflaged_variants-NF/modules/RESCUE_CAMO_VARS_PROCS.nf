@@ -8,34 +8,19 @@ nextflow.enable.dsl=2
 params.GVCF_DIRECTORY = './path/to/directories'
 
 workflow RESCUE_CAMO_VARS_WF {
-    take:
-        bam_path
-        extraction_bed
-        ref_fasta
-        masked_ref_fasta
-        gatk_bed
-        n_samples_per_batch
-        max_repeats_to_rescue
-        camo_annotations
-        align_to_bed
-        ref_tag
 
     main:
 
         /*
          * Prep batch files for RESCUE_CAMO_VARS_PROC
          */
-        PREP_BATCH_FILES_PROC(bam_path, n_samples_per_batch)
+        PREP_BATCH_FILES_PROC()
 
         /*
          * Rescue camo vars
          */
         RESCUE_CAMO_VARS_PROC(
-                                extraction_bed,
-                                masked_ref_fasta,
-                                gatk_bed,
                                 PREP_BATCH_FILES_PROC.out.bam_sets.flatten(),
-                                max_repeats_to_rescue
                               )
 
         /*
@@ -43,11 +28,11 @@ workflow RESCUE_CAMO_VARS_WF {
          * `NextFlow/Groovy` wizardry is courtesy of @Steve on `StackOverflow`
          * https://stackoverflow.com/questions/70718115/the-most-nextflow-like-dsl2-way-to-incorporate-a-former-bash-scheduler-submiss/70735565#70735565
          */
-        Channel.fromPath( gatk_bed ) \
-            | splitCsv(sep: '\t') \
+        Channel.fromPath( params.gatk_bed )
+            | splitCsv(sep: '\t')
             | map { line ->
                 tuple( line[4].toInteger(), "${line[0]}:${line[1]}-${line[2]}" )
-            } \
+            }
             | set { regions }
 
         RESCUE_CAMO_VARS_PROC.out.camo_gvcfs.flatten()
@@ -57,19 +42,19 @@ workflow RESCUE_CAMO_VARS_WF {
              .map { dirname, gvcf_files ->
                  def ploidy = dirname.replaceFirst(/^.*_/, "").toInteger()
                  def repeat = ploidy.intdiv(2)
-                 def ref_fasta = file( masked_ref_fasta )
-                 tuple( repeat, dirname, ref_fasta, gvcf_files )
+                 def masked_ref_fasta = file( params.masked_ref_fasta )
+                 tuple( repeat, dirname, masked_ref_fasta, gvcf_files )
              }
              .combine( regions, by: 0 )
-             .map { repeat, dirname, ref_fasta, gvcf_files, region ->
-                 tuple( dirname, region, ref_fasta, gvcf_files )
+             .map { repeat, dirname, masked_ref_fasta, gvcf_files, region ->
+                 tuple( dirname, region, masked_ref_fasta, gvcf_files )
              } | COMBINE_AND_GENOTYPE_PROC
 
 
         /*
          * Identify false positives (i.e., reference-based artifiacts).
          */
-        IDENTIFY_FALSE_POSITIVES_PROC(camo_annotations, align_to_bed, ref_fasta, ref_tag)
+        IDENTIFY_FALSE_POSITIVES_PROC()
 }
 
 
@@ -81,10 +66,6 @@ workflow RESCUE_CAMO_VARS_WF {
 process PREP_BATCH_FILES_PROC {
 
 	label 'local'
-
-	input:
-		val(bam_path)
-        val(n_samples_per_batch)
 
 	output:
 		path('bam_set_*', emit: bam_sets)
@@ -99,17 +80,17 @@ process PREP_BATCH_FILES_PROC {
     shopt -s nocaseglob # Sets nocaseglob
 
     # Loop over all files ending with .sam, .bam, and .cram and print
-    # to file. Then split file into sets of $n_samples_per_batch so we can
-    # process sets of $n_samples_per_batch .bam files per job submission.
+    # to file. Then split file into sets of $params.n_samples_per_batch so we can
+    # process sets of $params.n_samples_per_batch .bam files per job submission.
 
-	for bam in $bam_path/*.{bam,cram}
+	for bam in $params.bam_path/*.{bam,cram}
 	do
 		echo \$bam
 	done > bam_list.txt
 
     # Split bam_list.txt into sets of 50 bam files with prefix 'bam_set_'
     # using numeric suffixes (-d; e.g., 00, 01, etc.).
-	split -dl $n_samples_per_batch bam_list.txt 'bam_set_'
+	split -dl $params.n_samples_per_batch bam_list.txt 'bam_set_'
 
     # Unset nullglob and nocaseglob
     shopt -u nullglob # Unsets nullglob
@@ -144,11 +125,7 @@ process RESCUE_CAMO_VARS_PROC {
 	label 'RESCUE_CAMO_VARS_PROC'
 
 	input:
-		val(extraction_bed)
-        val(masked_ref_fasta)
-		val(gatk_bed)
         val(bam_set)
-        val(max_repeats_to_rescue)
 
  	output:
         /*
@@ -166,7 +143,13 @@ process RESCUE_CAMO_VARS_PROC {
      * how large the run is).
      */
 	"""
-		bash rescue_camo_variants.sh $masked_ref_fasta $extraction_bed $gatk_bed $bam_set $max_repeats_to_rescue ${params.clean_tmp_files}
+		bash rescue_camo_variants.sh \\
+            $params.masked_ref_fasta \\
+            $params.extraction_bed \\
+            $params.gatk_bed \\
+            $bam_set \\
+            $params.max_repeats_to_rescue \\
+            ${params.clean_tmp_files}
 	"""
 }
 
@@ -190,12 +173,12 @@ process COMBINE_AND_GENOTYPE_PROC {
     input:
 
         /*
-         * Receiving as ref_fasta and gvcf_files as 'val' input so that NextFlow
+         * Receiving masked_ref_fasta and gvcf_files as 'val' input so that NextFlow
          * will not 'stage' the files in the working directory because it doesn't
          * stage the index files with them. The other option would be to also receive
          * the index files as paths so both are staged.
          */
-        tuple val(ploidy_group), val(region_string), val(ref_fasta), val(gvcf_files)
+        tuple val(ploidy_group), val(region_string), val(masked_ref_fasta), val(gvcf_files)
 
 
     output:
@@ -213,7 +196,7 @@ process COMBINE_AND_GENOTYPE_PROC {
     """
     echo "Ploidy group: $ploidy_group"
     echo "Region: $region_string"
-    echo "Ref: $ref_fasta"
+    echo "Ref: $masked_ref_fasta"
 
     for gvcf_file in $gvcf_files
     do
@@ -231,7 +214,7 @@ process COMBINE_AND_GENOTYPE_PROC {
     gatk \\
         --java-options "${Xmx} ${Xms} -XX:+UseSerialGC" \\
         CombineGVCFs \\
-        -R "${ref_fasta}" \\
+        -R "${masked_ref_fasta}" \\
         -L "${region_string}" \\
         -O \$combined_region_gvcf \\
         -V \$input_gvcf_list
@@ -239,7 +222,7 @@ process COMBINE_AND_GENOTYPE_PROC {
     gatk \\
         --java-options "${Xmx} ${Xms} -XX:+UseSerialGC" \\
         GenotypeGVCFs \\
-        -R "${ref_fasta}" \\
+        -R "${masked_ref_fasta}" \\
         -L "${region_string}" \\
         -A GenotypeSummaries \\
         -O \$final_region_vcf \\
@@ -271,19 +254,18 @@ process IDENTIFY_FALSE_POSITIVES_PROC {
 
 	label 'IDENIFY_FALSE_POSITIVES'
 
-    input:
-        path camo_annotations
-        path align_to_bed
-        val ref_fasta
-        val ref_name
-        
     output:
-        path "reference_based_artifacts.${ref_name}.bed"
+        path "reference_based_artifacts.${params.masked_ref_tag}.bed"
 
     script:
     """
-    artifacts_bed="reference_based_artifacts.${ref_name}.bed"
+    artifacts_bed="reference_based_artifacts.${params.masked_ref_tag}.bed"
 
-    bash identify_false_positives.sh $camo_annotations $align_to_bed $ref_fasta \$artifacts_bed $task.cpus
+    bash identify_false_positives.sh \\
+        $params.camo_annotations \\
+        $params.align_to_bed \\
+        $params.orig_ref_fasta \\
+        \$artifacts_bed \\
+        $task.cpus
     """
 }

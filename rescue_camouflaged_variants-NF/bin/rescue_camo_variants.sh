@@ -13,8 +13,8 @@ extraction_bed=$2
 echo "Extraction bed: $extraction_bed"
 
 # The bed file to use for calling variants. This will make GATK much faster.
-# Using a different bed file here because the regions are expanded a bit
-# since reads extend past.
+# Using a different bed file here because the regions are restricted to the
+# exact camo CDS regions.
 gatk_bed=$3
 echo "GATK bed: $gatk_bed"
 

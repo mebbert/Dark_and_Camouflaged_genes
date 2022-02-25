@@ -105,7 +105,8 @@ realign="tmp_realign.bed"
 camo_sorted="tmp_camo.sorted.bed"
 alignto_sorted="${SEQUENCER}.${GVERS}.camo.align_to.sorted.bed"
 realign_sorted="${SEQUENCER}.${GVERS}.camo.realign.sorted.bed"
-gatk_bed="${SEQUENCER}.${GVERS}.camo.GATK.bed"
+gatk_bed_all="${SEQUENCER}.${GVERS}.camo.GATK.all_camo_regions.bed"
+gatk_bed_CDS_only="${SEQUENCER}.${GVERS}.camo.GATK.CDS_regions_only.bed"
 mapq_gene_bodies="low_mapq_gene_bodies.bed"
 mapq_not_camo="${SEQUENCER}.${GVERS}.low_mapq.NOT_camo.bed"
 
@@ -498,18 +499,34 @@ bedtools intersect \
 # fi
 
 ## Create GATK bed: bed that will give regions were camo variants will be called
-## The GATK bed is the CDS align to regions that are exclusively camo,
+## The GATK bed is the CDS align_to regions that are exclusively camo,
 ## The normal align_to lists the whole genebody element, GATK restricts to just those camo regions
 grep -vE "^#" $camo_annotations | \
 	awk '$5 == "CDS"' | \
 	bedtools intersect \
 		-a $alignto_sorted \
 		-b -\
-	> $gatk_bed \
+	> $gatk_bed_CDS_only \
 	|| {
 			echo "ERROR (`date`): Failed to create GATK bed. See log for details."
 			exit $?
 		}
+
+
+## Create GATK bed for all camo regions: bed that will give regions were camo variants will be called
+## The GATK bed is for all align_to camo regions (not just CDS) that are exclusively camo,
+## The normal align_to lists the whole genebody element, GATK restricts to just those camo regions
+grep -vE "^#" $camo_annotations | \
+	bedtools intersect \
+		-a $alignto_sorted \
+		-b -\
+	> $gatk_bed_all \
+	|| {
+			echo "ERROR (`date`): Failed to create GATK bed. See log for details."
+			exit $?
+		}
+
+
 
 # TMPSTATUS=("${PIPESTATUS[@]}")
 # if pipe_failed "${TMPSTATUS[@]}"; then
