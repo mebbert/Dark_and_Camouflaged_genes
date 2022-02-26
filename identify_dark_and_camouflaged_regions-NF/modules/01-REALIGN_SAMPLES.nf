@@ -198,12 +198,12 @@ process split_fastq_proc {
     lines_per_read=4
     n_lines=\$(($params.reads_per_run * lines_per_read))
 
-    zcat "${fastq}" \\
+    pgiz -dcp 4 "${fastq}" \\
     | \\
     split \\
     --suffix-length=5 \\
     --additional-suffix=".fastq" \\
-    --filter='gzip > \$FILE.gz' \\
+    --filter='pigz --fast -p 12 > \$FILE.gz' \\
     -d \\
     -l \$n_lines \\
     - \\
