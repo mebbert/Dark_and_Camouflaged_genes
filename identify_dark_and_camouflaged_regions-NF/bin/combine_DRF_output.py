@@ -12,7 +12,7 @@
 
 import sys
 from collections import defaultdict
-import gzip
+import mgzip
 
 # The minimum depth for a given nucleotide (and run of nucleotides)
 # to NOT be considered 'dark-by-depth'
@@ -32,8 +32,8 @@ def main(low_mapq_file_list, combined_low_depth_out_file, combined_low_mapq_out_
             beds_to_combine.append(open(bed_file_name, 'rt'))
 
         # Write .gzip files
-        with gzip.open(combined_low_depth_out_file, 'wt') as combined_low_depth:
-            with gzip.open(combined_low_mapq_out_file, 'wt') as combined_low_mapq:
+        with mgzip.open(combined_low_depth_out_file, 'wt', thread=2) as combined_low_depth:
+            with mgzip.open(combined_low_mapq_out_file, 'wt', thread=2) as combined_low_mapq:
                 print(beds_to_combine)
 
                 for line in beds_to_combine[0]:

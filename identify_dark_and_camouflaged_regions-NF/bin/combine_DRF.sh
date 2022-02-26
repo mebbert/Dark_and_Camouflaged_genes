@@ -14,8 +14,10 @@ LOW_MAPQ_DIR_BED_LIST=($LOW_MAPQ_DIR_BED_STRING_LIST)
 # The prefix for output files
 RESULT_PREFIX=$2
 
-# The number of threads to split this task into
-THREADS=$3
+# The number of threads to split this task into. This script will
+# spawn the number of threads defined (divided by 2), and each of
+# those threads will use 2 threads each.
+THREADS=$(( $3 / 2 ))
 
 function combine() {
 	SUFFIX=$1
@@ -37,7 +39,7 @@ function combine() {
 
 # Count the number of lines in the first .bed file to estimate
 # the number of lines across all input .bed files.
-total_lines=$(zcat ${LOW_MAPQ_DIR_BED_LIST[0]} | wc -l)
+total_lines=$(pigz -dcp 4 ${LOW_MAPQ_DIR_BED_LIST[0]} | wc -l)
 nline_per_batch=$(( ($total_lines + $THREADS - 1) / $THREADS ))
 
 # For each low_mapq_bed file provided, split it into THREADS
@@ -51,7 +53,7 @@ do
 	
 	mkdir $sample_dir
 
-	zcat $low_mapq_bed | split -l $((nline_per_batch)) - $sample_dir &
+	pigz -dcp 1 $low_mapq_bed | split -l $((nline_per_batch)) - $sample_dir &
 
 done
 wait
@@ -76,8 +78,8 @@ wait
 LOW_DEPTH_DIR_OUT=${RESULT_PREFIX}.combined.dark.low_depth.bed.gz
 LOW_MAPQ_DIR_OUT=${RESULT_PREFIX}.combined.dark.low_mapq.bed.gz
 
-echo -e "chrom\tstart\tend\tavg_nMapQBelowThreshold\tavg_depth\tavg_percMapQBelowThreshold" | gzip > $LOW_DEPTH_DIR_OUT
-echo -e "chrom\tstart\tend\tavg_nMapQBelowThreshold\tavg_depth\tavg_percMapQBelowThreshold" | gzip > $LOW_MAPQ_DIR_OUT
+echo -e "chrom\tstart\tend\tavg_nMapQBelowThreshold\tavg_depth\tavg_percMapQBelowThreshold" | pigz --fast -p 1 > $LOW_DEPTH_DIR_OUT
+echo -e "chrom\tstart\tend\tavg_nMapQBelowThreshold\tavg_depth\tavg_percMapQBelowThreshold" | pigz --fast -p 1 > $LOW_MAPQ_DIR_OUT
 
 # The files were written via gzip, so can simply be catted together.
 cat ${LOW_DEPTH_DIR}/*  >> $LOW_DEPTH_DIR_OUT
