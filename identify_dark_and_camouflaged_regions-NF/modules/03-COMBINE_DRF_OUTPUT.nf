@@ -15,12 +15,12 @@ process COMBINE_DRF_OUTPUT_PROC {
 	label 'COMBINE_DRF_OUTPUT_PROC'
 
 	input:
-		tuple val(sample_name), path(low_mapq_bed_list)
+		path(low_mapq_bed_list)
 		val(result_prefix)
 
 	output:
-		tuple val(sample_name), path('*.dark.low_depth.bed.gz'), emit: low_depth_out
-		tuple val(sample_name), path('*.dark.low_mapq.bed.gz'), emit: low_mapq_out
+		path('*.dark.low_depth.bed.gz'), emit: low_depth_out
+		path('*.dark.low_mapq.bed.gz'), emit: low_mapq_out
 
 	script:
 	"""

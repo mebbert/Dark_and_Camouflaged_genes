@@ -91,7 +91,7 @@ workflow REALIGN_SAMPLES_WF {
              tuple( sample_name.toString(), bam_files )
          }
          | samtools_merge_proc
-         | view()
+         // | view()
 
     emit:
         samtools_merge_proc.out

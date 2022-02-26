@@ -9,8 +9,8 @@ process CREATE_BED_FILE_PROC {
 	label 'CREATE_BED_FILE_PROC'
 
 	input:
-		tuple val(sample_name), path(low_depth)
-		tuple val(sample_name), path(low_mapq)
+		path(low_depth)
+		path(low_mapq)
 		path(annotation_bed)
 
 	output:

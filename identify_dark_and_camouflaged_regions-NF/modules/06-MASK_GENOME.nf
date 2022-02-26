@@ -9,7 +9,7 @@ process MASK_GENOME_PROC {
 	label 'MASK_GENOME_PROC'
 
 	input:
-		tuple val(sample_name), path(align_to_bed)
+		path(align_to_bed)
 		val(mask_ref_prefix)
 
 	output:

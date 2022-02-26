@@ -535,7 +535,7 @@ grep -vE "^#" $camo_annotations | \
 # fi
 
 
-		
+
 ################################################################
 # Create bed for regions that are low_mapq but NOT camouflaged #
 ################################################################

@@ -97,7 +97,7 @@ process COMBINE_SAMPLE_DRF_FILES_PROC {
         tuple val(sample_name), path(sample_low_mapq_beds)
 
     output:
-        tuple val(sample_name), path('*final.bed.gz')
+        path('*final.bed.gz')
 
     script:
 
