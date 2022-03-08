@@ -25,7 +25,15 @@ workflow RUN_DRF_WF {
          * Create intervals to split DRF jobs across intervals
          */
         intervals = create_intervals( params.align_to_ref, interval_length )
-        // intervals = ['1:10000-20000', '1:207496157-207641765', '5:55555-66666', '22:15693544-15720708']
+
+        intervals_file = file("${params.align_to_ref_tag}.DRF_intervals.txt")
+        intervals_file.delete()
+        intervals.each {
+            intervals_file << "${it}\n"
+        }
+
+        // intervals = ['1:10000-20000', '1:207496157-207641765',
+        //                 '5:55555-66666', '22:15693544-15720708']
         intervals_ch = Channel.from( intervals )
 
 
@@ -53,7 +61,8 @@ workflow RUN_DRF_WF {
 
 
 /*
- * Run DRF for a given sample and interval
+ * Run DRF for a given sample and interval. The 'sample_input_file' and
+ * 'sample_input_file_index' are a (b|cr)am file and its index.
  */
 process RUN_DRF_PROC {
 
@@ -63,10 +72,15 @@ process RUN_DRF_PROC {
 	label 'RUN_DRF_PROC'
 
 	input:
-        tuple val(sample_name), path(sample_input_file), val(interval)
+        tuple val(sample_name),
+                path(sample_input_file),
+                path(sample_input_file_index),
+                val(interval)
 
 	output:
-		tuple val(sample_name), path("**/${sample_name}*.dark.low_mapq*.bed*.gz"), emit: low_mapq_beds
+		tuple val(sample_name),
+                 path("**/${sample_name}*.dark.low_mapq*.bed*.gz"),
+                 emit: low_mapq_beds
 
 	script:
 	"""
@@ -144,9 +158,9 @@ def create_intervals( ref, interval_length ) {
             while (remaining_contig_length > 0) {
                 
                 /*
-                 * 0-based start & end
+                 * 1-based start & end
                  */
-                start = 0 + (contig_length - remaining_contig_length)
+                start = 1 + (contig_length - remaining_contig_length)
 
                 if( remaining_contig_length < interval_length ) {
                     end = contig_length

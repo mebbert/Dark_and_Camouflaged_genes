@@ -42,7 +42,8 @@ params.original_ref = "${projectDir}/../sequencing_resources/references/1KGenome
  * Specifically, including alternate contigs will have a major impact. See our
  * paper for details.
  */
-params.align_to_ref = "${projectDir}/../sequencing_resources/references/Ensembl/hg38_release_93/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+// params.align_to_ref = "${projectDir}/../sequencing_resources/references/Ensembl/hg38_release_93/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+params.align_to_ref = "/project/mteb223_uksr/sequencing_resources/references/Tanner_Original_Camo_References/refdata-GRCh38-2.1.0/fasta/genome.fa" \
 // params.align_to_ref = "${projectDir}/../sequencing_resources/references/Gencode/release_31/GRCh38.primary_assembly/GRCh38.primary_assembly.genome.fa"
 
 /*
@@ -55,7 +56,8 @@ params.align_to_ref = "${projectDir}/../sequencing_resources/references/Ensembl/
  * dark or camouflaged. Specifically, including alternate contigs will have a major impact. See our
  * paper for details.
  */
-params.align_to_ref_tag = 'Ensembl_GRCh38_release_93'
+// params.align_to_ref_tag = 'Ensembl_GRCh38_release_93'
+params.align_to_ref_tag = 'Tanner_Original_Camo_Reference'
 // params.align_to_ref_tag = 'Gencode_release_31-primary_assembly'
 
 /*
@@ -67,16 +69,16 @@ params.align_to_ref_tag = 'Ensembl_GRCh38_release_93'
  * /path/to/folder/<specific_file>.bam, etc.). The input will be limited to .sam, .bam, and .cram
  * files before proceeding.
  */
-// params.input_sample_path = "${projectDir}/test_data/ADSP_sample_crams/*"
+params.input_sample_path = "${projectDir}/test_data/ADSP_sample_crams/*"
 // params.input_sample_path = file( "${projectDir}/test_data/ADSP_sample_crams/A-CUHS-CU003023-test.cram" )
-params.input_sample_path = "${projectDir}/original_ADSP_samples/*.cram"
+// params.input_sample_path = "${projectDir}/original_ADSP_samples/*.cram"
 
 /*
  * This string can be used to help name the results folder (if provided and included when defining
  * the results parameter. 
  */
-// params.sample_input_tag = "Test_samples"
-params.sample_input_tag = "Original_ADSP_samples"
+params.sample_input_tag = "Test_samples"
+// params.sample_input_tag = "Original_ADSP_samples"
 
 /*
  * Defines the number of reads per BWA alignment job. This number must be
@@ -90,8 +92,8 @@ params.sample_input_tag = "Original_ADSP_samples"
  * returned, rather than reporting the size of the list of files, which is what is expected.
  * Nextflow channels seem inherently buggy to me.
  */
-// params.reads_per_run = 100_000
-params.reads_per_run = 50_000_000
+params.reads_per_run = 100_000
+// params.reads_per_run = 50_000_000
 
 /*
  * Specifies the final output format for re-aligned samples. Can be either '.bam' or '.cram' (w/ or
@@ -206,7 +208,6 @@ workflow{
      * process for each input sample file and genome intervals of size
      * 'params.DRF_interval_length'.
      */
-    REALIGN_SAMPLES_WF.out.view()
  	RUN_DRF_WF(REALIGN_SAMPLES_WF.out, params.DRF_interval_length)
  
 

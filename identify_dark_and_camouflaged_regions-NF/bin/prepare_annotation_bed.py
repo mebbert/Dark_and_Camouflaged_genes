@@ -11,7 +11,12 @@ def extractAnnos(annos):
 
     return annos_dict
 
-valid_regions = set(list(map(str, range(1,23))) + ['X', 'Y', 'MT'])
+valid_regions = set(
+                    list(map(str, range(1,23))) + \
+                        ['X', 'Y', 'M', 'MT'] + \
+                        ['chr' + chrom for chrom in map(str, range(1,23))] + \
+                        ['chrX', 'chrY', 'chrM', 'chrMT']
+                   )
 
 def printLine(region):
     if region == None:

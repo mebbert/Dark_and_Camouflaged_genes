@@ -5,7 +5,7 @@ set -x
 
 sample_name=$1
 sample_input_file=$2 #Bam input into DRF program
-original_ref=$3 # Human Reference genome used in the alignment 
+align_to_ref=$3 # Human Reference genome used in the alignment 
 DRF_jar=$4 #Path to DRF jar
 intervals=$5
 
@@ -31,17 +31,17 @@ low_mapq_bed="${sample_dir}/${sample_name}.min_depth_${min_depth}.min_mapq_mass_
 inc_bed="/dev/null" # No need to store incomplete bases for each sample
 
 if ! java -Xmx32G -jar $DRF_jar \
-		-i $sample_input_file \
-		--human-ref $original_ref \
+		-i "${sample_input_file}" \
+		--human-ref "${align_to_ref}" \
 		--min-region-size 1 \
-		--mapq-threshold $mapq_thresh \
-		--min-mapq-mass $min_mapq_mass \
-		--min-depth $min_depth \
+		--mapq-threshold "${mapq_thresh}" \
+		--min-mapq-mass "${min_mapq_mass}" \
+		--min-depth "${min_depth}" \
 		--region-exclusivity \
-		--low-coverage-bed-output $low_cov_bed \
-		--low-mapq-bed-output $low_mapq_bed \
-		--incomplete-bed-output $inc_bed \
-		--interval-list $intervals; then
+		--low-coverage-bed-output "${low_cov_bed}" \
+		--low-mapq-bed-output "${low_mapq_bed}" \
+		--incomplete-bed-output "${inc_bed}" \
+		--interval-list "${intervals}"; then
 
 	echo "ERROR: DRF failed. Check logs for details."
 	exit 1

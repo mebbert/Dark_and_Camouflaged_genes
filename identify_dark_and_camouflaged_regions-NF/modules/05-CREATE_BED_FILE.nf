@@ -14,8 +14,7 @@ process CREATE_BED_FILE_PROC {
 		path(annotation_bed)
 
 	output:
-		// path 'illuminaRL100.hg38*' 
-		tuple val(sample_name), path("*align_to.sorted.bed"), emit: align_to_bed
+		path("*align_to.sorted.bed"), emit: align_to_bed
 		path "*" 
 
 	script:

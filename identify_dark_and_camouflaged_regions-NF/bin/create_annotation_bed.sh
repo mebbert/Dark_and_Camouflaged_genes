@@ -84,3 +84,10 @@ annotation_bed=${base//.gff3/.annotation.bed}
 bedtools intersect  -a $genes -b $exons -s -loj | \
 	sort -k1,1 -k2,2n -k9,9n | \
 	prepare_annotation_bed.py > $annotation_bed
+
+# Check that $annotation_bed is not empty. Fail, if so.
+anno_lines=$(cat $annotation_bed | wc -l)
+if [[ "${anno_lines}" == 0 ]]; then
+	echo "ERROR: $annotation_bed is empty!"
+	exit 1
+fi

@@ -47,6 +47,13 @@ class Graph:
             print("%s -> {%s};" % (region, ' '.join(neighbs)))
         print("}")
 
+
+# This function will read in the low mapq annotations, where
+# it will use the full range of the gene body element. i.e.,
+# if there are multiple low mapq regions within a single gene
+# body element (e.g., an intron) it won't read each individual
+# low mapq region, but will read in the entire range of the 
+# gene body element.
 def loadLowMapQRegions(low_mapq_annos):
     low_mapq_regions = {}
     low_mapq_annos = open(low_mapq_annos, 'r')
@@ -62,10 +69,16 @@ def loadLowMapQRegions(low_mapq_annos):
     
     return low_mapq_regions
 
+
 def main(low_mapq_annos, blat_results_file, realign_file, align_to_file, camo_bed):
+
+    # Read in the low mapq annotations
     regions = loadLowMapQRegions(low_mapq_annos)
     mapping = Graph()
     blat_results = open(blat_results_file, 'r')
+
+    # For each blat hit, add an edge if it's not
+    # from the same gene body element (e.g., intron)
     camo_bed = open(camo_bed, 'w')
     for line in blat_results:
         toks = line.strip().split('\t')
@@ -86,6 +99,10 @@ def main(low_mapq_annos, blat_results_file, realign_file, align_to_file, camo_be
     nodes = list(mapping.nodes.keys())
     sorted(nodes, key = lambda region_id : len(mapping.nodes[region_id]))
     masked = defaultdict(int)
+
+    # Determine which of the camo regions to use as the reference
+    # camo region. i.e., if there are 3 regions in a given set,
+    # use the first one we encounter as the reference region.
     for region_id in nodes:
         if masked[region_id] == 0:
             masked[region_id] = 1

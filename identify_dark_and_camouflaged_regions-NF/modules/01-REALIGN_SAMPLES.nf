@@ -35,13 +35,17 @@ workflow REALIGN_SAMPLES_WF {
         | set { sample_input_files }
 
     /*
-     * Get headers for all input (b|cr)am files
+     * Get headers for all input (b|cr)am files. 
+     *
+     * NOTE: 'lsamtools' is samtools compiled against 'libdeflate', which we
+     * have found to be much faster than standard samtools that is compiled
+     * against 'zlib'.
      */
-    samtools_view_header_proc( sample_input_files )
+    lsamtools_view_header_proc( sample_input_files )
 
     /*
      * Steps will do as follows to prepare for re-alignment:
-     *   1. samtools_collate_and_fastq_proc: collate the input (b|cr)am files
+     *   1. lsamtools_collate_and_fastq_proc: collate the input (b|cr)am files
      *      and convert to a single, interleaved .fastq file
      *   2. split_fastq_proc: split the single .fastq file into chunks of
      *      'params.reads_per_run' reads for BWA alignment
@@ -65,39 +69,39 @@ workflow REALIGN_SAMPLES_WF {
      * of paired-end reads
      */
     sample_input_files
-        | samtools_collate_and_fastq_proc
+        | lsamtools_collate_and_fastq_proc
         | split_fastq_proc
         | map { sample_name, fastq_files ->
             tuple( groupKey(sample_name, fastq_files.size()), fastq_files )
         }
         | transpose()
-        | combine( samtools_view_header_proc.out, by: 0 )
+        | combine( lsamtools_view_header_proc.out, by: 0 )
         | set { realignment_inputs_ch }
 
 
      /*
       * Steps will do as follows for re-alignment:
       *   1. bwa_mem_proc: Re-align the mini .fastq files using BWA MEM
-      *   2. samtools_coordinate_sort_proc: sort the individual mini .(b|cr)am files
+      *   2. lsamtools_csort_proc: sort the individual mini .(b|cr)am files
       *      generated from BWA MEM
       *   3. groupTuple: group mini .(b|cr)am files by sample name
       *   4. map: creates tuples of sample_name and the mini .(b|cr)am files
-      *   5. samtools_merge_proc: merge all of the mini .(b|cr)am files
+      *   5. lsamtools_merge_proc: merge all of the mini .(b|cr)am files
       */
      bwa_mem_proc( realignment_inputs_ch )
-         | samtools_coordinate_sort_proc
+         | lsamtools_csort_proc
          | groupTuple()
          | map { sample_name, bam_files ->
              tuple( sample_name.toString(), bam_files )
          }
-         | samtools_merge_proc
+         | lsamtools_merge_proc
          // | view()
 
     emit:
-        samtools_merge_proc.out
+        lsamtools_merge_proc.out
 }
 
-process samtools_view_header_proc {
+process lsamtools_view_header_proc {
 
     tag { "${sample_name}" }
 
@@ -110,14 +114,14 @@ process samtools_view_header_proc {
     tuple val(sample_name), path("${sample_name}.header.txt")
 
     """
-    samtools view \\
+    lsamtools view \\
         -H \\
         -o "${sample_name}.header.txt" \\
         "${bam}"
     """
 }
 
-process samtools_name_sort_proc {
+process lsamtools_name_sort_proc {
 
     tag { "${sample_name}" }
 
@@ -138,9 +142,9 @@ process samtools_name_sort_proc {
     def mem_per_thread = avail_mem ? "-m ${avail_mem}G" : ''
 
     """
-    samtools sort \\
+    lsamtools sort \\
         -@ "${additional_threads}" \\
-        ${mem_per_thread} \\
+        -m "${mem_per_thread}" \\
         -n \\
         -o "${bam.baseName}.nsorted.bam" \\
         -T "${bam.baseName}.nsorted" \\
@@ -148,11 +152,11 @@ process samtools_name_sort_proc {
     """
 }
 
-process samtools_collate_and_fastq_proc {
+process lsamtools_collate_and_fastq_proc {
 
     tag { "${sample_name}" }
 
-    label 'samtools_collate_and_fastq_proc'
+    label 'lsamtools_collate_and_fastq_proc'
 
     input:
     tuple val(sample_name), path(bam)
@@ -165,17 +169,18 @@ process samtools_collate_and_fastq_proc {
     def additional_threads = task.cpus - 1
     
     """
-    samtools collate \\
+    lsamtools collate \\
         -@ "${additional_threads}" \\
         -O \\
         -f \\
         "${bam}" \\
         | \\
-    samtools fastq \\
+    lsamtools fastq \\
+        -@ "${additional_threads}" \\
         -O \\
         -T RG,BC \\
         -0 /dev/null \\
-        --reference $params.original_ref \\
+        --reference "${params.original_ref}" \\
         -c 1 \\
         -o "${sample_name}.interleaved_R1_R2.fastq.gz" \\
         -
@@ -196,9 +201,9 @@ process split_fastq_proc {
 
     """
     lines_per_read=4
-    n_lines=\$(($params.reads_per_run * lines_per_read))
+    n_lines=\$(("${params.reads_per_run}" * lines_per_read))
 
-    pgiz -dcp 4 "${fastq}" \\
+    pigz -dcp 4 "${fastq}" \\
     | \\
     split \\
     --suffix-length=5 \\
@@ -245,29 +250,29 @@ process bwa_mem_proc {
     def task_cpus = task.cpus > 1 ? task.cpus - 1 : task.cpus
 
     """
-    if [ "$params.output_format" = "bam" ]; then
+    if [ "${params.output_format}" = "bam" ]; then
         bwa mem \\
             -p \\
-            -t ${task_cpus} \\
+            -t "${task_cpus}" \\
             -M \\
             -C \\
             -H <(grep "^@RG" "${header}") \\
             "${params.align_to_ref}" \\
             "${fastq}" |
-        samtools view \\
+        lsamtools view \\
             -1 \\
             -o "${fastq.baseName}.unsorted.mini.bam" \\
             -
     else
         bwa mem \\
             -p \\
-            -t ${task_cpus} \\
+            -t "${task_cpus}" \\
             -M \\
             -C \\
             -H <(grep "^@RG" "${header}") \\
             "${params.align_to_ref}" \\
             "${fastq}" |
-        samtools view \\
+        lsamtools view \\
             -C \\
             -T params.align_to_ref \\
             -o "${fastq.baseName}.unsorted.mini.bam" \\
@@ -276,11 +281,67 @@ process bwa_mem_proc {
     """
 }
 
-process samtools_coordinate_sort_proc {
+process csort_proc {
 
     tag { "${sample_name}:${bam.name}" }
 
-    label 'samtools_coordinate_sort_proc'
+    label 'csort_proc'
+
+    input:
+    tuple val(sample_name), path(bam)
+
+    output:
+    tuple val(sample_name), path("${bam.baseName}.csorted.{bam,cram}")
+
+    script:
+
+    def additional_threads = task.cpus - 1
+
+    /*
+     * Calculate mem per thread. Multiply total mem by 0.8 to provide a 20%
+     * buffer.
+     */
+    def avail_mem = task.memory ? ( task.memory.toGiga() * 0.8 ).toInteger().intdiv(task.cpus) : 0
+    def mem_per_thread = avail_mem ? "${avail_mem}G" : ''
+
+    """
+    echo "Available mem: ${avail_mem}"
+    echo "Mem per thread: ${mem_per_thread}"
+
+    if [ "${params.output_format}" = "bam" ]; then
+        sambamba sort \\
+            -t "${task.cpus}" \\
+            -f bam \\
+            -m "${avail_mem}" \\
+            -o "${bam.baseName}.csorted.bam" \\
+            -l 2 \\
+            "${bam}"
+
+        sambamba index \\
+            -t "${task.cpus}" \\
+            --show-progress \\
+            "${bam.baseName}.csorted.bam"
+
+    else
+        # sambamba does not support .cram, so still using lsamtools
+        lsamtools sort \\
+            -@ "${additional_threads}" \\
+            -m ${mem_per_thread} \\
+            -o "${bam.baseName}.csorted.bam" \\
+            -T "${bam.baseName}.csorted" \\
+            -O cram \\
+            --reference "${params.align_to_ref}" \\
+            --write-index \\
+            "${bam}"
+    fi
+    """
+}
+
+process lsamtools_csort_proc {
+
+    tag { "${sample_name}:${bam.name}" }
+
+    label 'lsamtools_csort_proc'
 
     input:
     tuple val(sample_name), path(bam)
@@ -302,18 +363,18 @@ process samtools_coordinate_sort_proc {
     """
     echo "Available mem: $avail_mem"
     echo "Mem per thread: $mem_per_thread"
-    if [ "$params.output_format" = "bam" ]; then
-        samtools sort \\
+    if [ "${params.output_format}" = "bam" ]; then
+        lsamtools sort \\
             -@ "${additional_threads}" \\
-            -m ${mem_per_thread} \\
+            -m "${mem_per_thread}" \\
             -o "${bam.baseName}.csorted.bam" \\
             -T "${bam.baseName}.csorted" \\
             --write-index \\
             "${bam}"
     else
-        samtools sort \\
+        lsamtools sort \\
             -@ "${additional_threads}" \\
-            -m ${mem_per_thread} \\
+            -m "${mem_per_thread}" \\
             -o "${bam.baseName}.csorted.bam" \\
             -T "${bam.baseName}.csorted" \\
             -O cram \\
@@ -324,7 +385,8 @@ process samtools_coordinate_sort_proc {
     """
 }
 
-process samtools_merge_proc {
+
+process lsamtools_merge_proc {
 
     /*
      * Publish results. 'mode: copy' will copy the files into the publishDir
@@ -334,24 +396,32 @@ process samtools_merge_proc {
 
     tag { sample_name }
 
-    label 'samtools_merge_proc'
+    label 'lsamtools_merge_proc'
 
     input:
     tuple val(sample_name), path(bams)
 
     output:
-    tuple val(sample_name), path("${sample_name}*.sorted.merged.final.{bam,cram}{,.bai}")
+    tuple val(sample_name),
+            path("${sample_name}*.sorted.merged.final.{bam,cram}"),
+            path("${sample_name}*.sorted.merged.final.{bam,cram}{.bai,.csi,.crai}")
+
+    script:
+
+    def additional_threads = task.cpus - 1
 
     """
-    if [ "$params.output_format" = "bam" ]; then
-        samtools merge \\
+    if [ "${params.output_format}" = "bam" ]; then
+        lsamtools merge \\
+            -@ "${additional_threads}" \\
             -c \\
             -p \\
             "${sample_name}.${params.align_to_ref_tag}.sorted.merged.final.bam" \\
             --write-index \\
             ${bams}
     else
-        samtools merge \\
+        lsamtools merge \\
+            -@ "${additional_threads}" \\
             -c \\
             -p \\
             -O cram \\

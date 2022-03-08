@@ -40,6 +40,7 @@ function combine() {
 # Count the number of lines in the first .bed file to estimate
 # the number of lines across all input .bed files.
 total_lines=$(pigz -dcp 4 ${LOW_MAPQ_DIR_BED_LIST[0]} | wc -l)
+#total_lines=$(zcat ${LOW_MAPQ_DIR_BED_LIST[0]} | wc -l)
 nline_per_batch=$(( ($total_lines + $THREADS - 1) / $THREADS ))
 
 # For each low_mapq_bed file provided, split it into THREADS
@@ -54,6 +55,7 @@ do
 	mkdir $sample_dir
 
 	pigz -dcp 1 $low_mapq_bed | split -l $((nline_per_batch)) - $sample_dir &
+	# zcat $low_mapq_bed | split -l $((nline_per_batch)) - $sample_dir &
 
 done
 wait
