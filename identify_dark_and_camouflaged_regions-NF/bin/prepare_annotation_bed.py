@@ -43,9 +43,21 @@ def main():
         gene_score = toks[4]
         gene_strand = toks[5]
         annos = extractAnnos(toks[6])
+
+        # annos["ID"] will return either "ID=<ENSG_ID>" or "ID=gene:<ENSG_ID>". Strip
+        # "gene:" if it exists.
         gene_ID = annos["ID"]
-        gene_name = annos["Name"]
+        if gene_ID.startswith('gene:'):
+            gene_ID = gene_ID.split(':')[1]
+
         biotype = annos["biotype"]
+
+        # Somewhere between GRCh38 release 93 and 105, Ensembl dropped 'Name' annotations for come
+        # genes. Not sure why. If the 'Name' annotation is missing, just set it to the gene ID.
+        try:
+            gene_name = annos["Name"]
+        except KeyError as e:
+            gene_name = gene_ID
 
         if toks[7] == '.': 
            # print('toks 7 is a dot')
@@ -78,13 +90,13 @@ def main():
         if "UTR" in region_type:
             #print('utr in region_type')
             UTR_count[gene_ID] += 1
-            region_ID = gene_ID[5:] + "_UTR_%d" % UTR_count[gene_ID]
+            region_ID = gene_ID[4:] + "_UTR_%d" % UTR_count[gene_ID]
             region_Name = gene_name + "_UTR_%d" % UTR_count[gene_ID]
         else:
             #print('utr NOT in region_type')
             exon_count[gene_ID] += 1
-            region_ID = gene_ID[5:] + "_%d" % exon_count[gene_ID]
-            region_Name = gene_name + "_%d" % exon_count[gene_ID]
+            region_ID = gene_ID[4:] + "_exon_%d" % exon_count[gene_ID]
+            region_Name = gene_name + "_exon_%d" % exon_count[gene_ID]
 
         region = (chrom, region_start, region_end, region_type, region_score, region_strand, region_ID, region_Name, biotype)
 
@@ -104,7 +116,7 @@ def main():
                 intron_start = previous_region[2] + 1
                 intron_end = region[1] - 1
                 intron_count[gene_ID] += 1
-                intron_ID = gene_ID[5:] + "_intron_%d" % intron_count[gene_ID]
+                intron_ID = gene_ID[4:] + "_intron_%d" % intron_count[gene_ID]
                 intron_Name = gene_name + "_intron_%d" % intron_count[gene_ID]
                 intron = (chrom, intron_start, intron_end, "intron", region_score, region_strand, intron_ID, intron_Name, biotype)
                # print("printing intron")

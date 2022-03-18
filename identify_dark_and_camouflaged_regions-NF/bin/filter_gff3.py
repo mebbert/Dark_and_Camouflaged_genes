@@ -60,7 +60,7 @@ def main(gff3_file):
 
     # Identify genes to keep in each cluster from bedtools
     genesToKeep = selectGenesToKeep()
-    gff3 = open(gff3_file, 'r')
+    gff3 = open(gff3_file, 'rt')
     keep_gene = False
     keep_transcript = False
     gene_biotype = ''

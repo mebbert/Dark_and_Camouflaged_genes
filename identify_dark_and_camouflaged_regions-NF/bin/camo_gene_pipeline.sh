@@ -101,10 +101,10 @@ blat_bed=${blat_result//psl/bed}
 mapped_blat_results="query.results.filtered.mapped.txt"
 camo_bed="tmp_camo.bed"
 align_to="tmp_align_to.bed"
-realign="tmp_realign.bed"
+extraction="tmp_extraction.bed"
 camo_sorted="tmp_camo.sorted.bed"
 alignto_sorted="${SEQUENCER}.${GVERS}.camo.align_to.sorted.bed"
-realign_sorted="${SEQUENCER}.${GVERS}.camo.realign.sorted.bed"
+extraction_sorted="${SEQUENCER}.${GVERS}.camo.extraction.sorted.bed"
 gatk_bed_all="${SEQUENCER}.${GVERS}.camo.GATK.all_camo_regions.bed"
 gatk_bed_CDS_only="${SEQUENCER}.${GVERS}.camo.GATK.CDS_regions_only.bed"
 mapq_gene_bodies="low_mapq_gene_bodies.bed"
@@ -139,18 +139,23 @@ mapq_not_camo="${SEQUENCER}.${GVERS}.low_mapq.NOT_camo.bed"
 # exit status if we sent them to background with '&'.                                              #
 ####################################################################################################
 
-##################################################################################
-# Merge coordinates for depth bed, removing regions that are less than 20bp long #
-##################################################################################
+###################################################################################
+# Merge coordinates for depth bed, removing regions that are less than 20bp long. #
+# Calculate the mean, median depth (column 5).                                    #
+###################################################################################
 # Swallow 141 (SIGPIPE) because remove_unassembled_contigs.py closes pipe abruptly.
 # Bedtools is supposed to auto-detect .gz files. Version 2.30.0 has a bug passing
 # a .gz directly, so we are zcat-ing it into Bedtools. The issue has been fixed in
 # `master`, but we're still using 2.30.0. See the following link for details:
 # https://github.com/arq5x/bedtools2/issues/975
-time zcat $DEPTH_BED | bedtools merge -d 20 -c 5 -o mean,median -i stdin | \
+# time zcat $DEPTH_BED | bedtools merge -d 20 -c 5 -o mean,median -i stdin | \
+
+# print header line
+echo "#chrom\tstart\tend\tmean depth\tmedian depth" > ${depth_merged}
+time bedtools merge -d 20 -c 5 -o mean,median -i $DEPTH_BED | \
 	remove_unassembled_contigs.py | \
 	awk '{ if($3 - $2 > 20) print $0}' \
-	> $depth_merged \
+	>> $depth_merged \
 	|| if [[ $? -eq 141 ]]; then  # Swallow 141 (SIGPIPE)
 			true
 		else
@@ -170,14 +175,19 @@ TMPSTATUS=("${PIPESTATUS[@]}")
 	
 
 
-#################################################################################
-# Merge coordinates for mapq bed, removing regions that are less than 20bp long #
-#################################################################################
+##################################################################################
+# Merge coordinates for mapq bed, removing regions that are less than 20bp long. #
+# Calculate the mean, median depth (column 5).                                   #
+##################################################################################
 # Swallow 141 (SIGPIPE) because remove_unassembled_contigs.py closes pipe abruptly.
-time zcat $MAPQ_BED | bedtools merge -d 20 -c 5 -o mean,median -i stdin | \
+# time zcat $MAPQ_BED | bedtools merge -d 20 -c 5 -o mean,median -i stdin | \
+
+# print header line
+echo "#chrom\tstart\tend\tmean depth\tmedian depth" > ${mapq_merged}
+time bedtools merge -d 20 -c 5 -o mean,median -i $MAPQ_BED | \
 	remove_unassembled_contigs.py | \
 	awk '{ if($3 - $2 > 20) print $0}' \
-	> $mapq_merged \
+	>> $mapq_merged \
 	|| if [[ $? -eq 141 ]]; then  # Swallow 141 (SIGPIPE)
 			true
 		else
@@ -300,15 +310,13 @@ bedtools intersect \
 # the behavior for `-name` to include the name from the .bed file
 # and the coordinates. This feature is useful, but not exactly 
 # backwards compatible. We now need to specify `-nameOnly`.
-# 
-#		-nameOnly \
 mkdir -p "query"
 cat $mapq_annotations | \
 	grep -vE "^#" | \
 	bedtools getfasta \
 		-fi $GENOME \
 		-bed - \
-		-name \
+		-nameOnly \
 		-fo $query \
 	|| {
 			echo "ERROR (`date`): Failed to create blat query with 'bedtools getfasta'. See log for details."
@@ -438,12 +446,12 @@ bedtools intersect \
 
 ## From the scored intersected blat output, calculates the maps
 ## of which camo regions align to which other ones, and creates camo sets
-# lists all the regions in  acamo set in the realign file and selects the one region form that set that we 
+# lists all the regions in a camo set in the extraction file and selects the one region form that set that we 
 ## will use to align to (written in the align_to file, all other regions in set will be masked)
 if ! extract_camo_regions.py \
 	$mapq_annotations \
 	$mapped_blat_results \
-	$realign \
+	$extraction \
 	$align_to \
 	$camo_bed; then
 	echo "ERROR: `date` extract_camo_regions.py failed."
@@ -475,8 +483,8 @@ if ! bedtools sort -i $align_to -faidx $faidx > $alignto_sorted; then
 	echo "ERROR: `date` bedtools sort failed for $align_to."
 	exit 1
 fi
-if ! bedtools sort -i $realign  -faidx $faidx > $realign_sorted; then
-	echo "ERROR: `date` bedtools sort failed for $realign."
+if ! bedtools sort -i $extraction  -faidx $faidx > $extraction_sorted; then
+	echo "ERROR: `date` bedtools sort failed for $extraction."
 	exit 1
 fi
 
@@ -555,7 +563,7 @@ fi
 # 	$percent_dark $percent_depth $percent_mapq \
 # 	$biotype_dark $biotype_mapq $biotype_depth \
 # 	$dark_annotations $mapq_annotations $depth_annotations \
-# 	$alignto_sorted $realign_sorted $mapq_not_camo \
+# 	$alignto_sorted $extraction_sorted $mapq_not_camo \
 # 	$camo_annotations $percent_camo $biotype_camo \
 # 	$coding_dark $coding_mapq $coding_depth $coding_camo \
 # 	$gatk_bed \

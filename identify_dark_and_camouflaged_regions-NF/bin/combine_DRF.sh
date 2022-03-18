@@ -21,18 +21,18 @@ THREADS=$(( $3 / 2 ))
 
 function combine() {
 	SUFFIX=$1
-	LOW_DEPTH_DIR_OUT=$2
-	LOW_MAPQ_DIR_OUT=$3
+	LOW_DEPTH_FILE_OUT=$2
+	LOW_MAPQ_FILE_OUT=$3
 
 	COMBINE_INPUT="${suffix}.input"
 	find . -name "$suffix" > $COMBINE_INPUT
 
-	touch $LOW_DEPTH_DIR_OUT
-	touch $LOW_MAPQ_DIR_OUT
+	touch $LOW_DEPTH_FILE_OUT
+	touch $LOW_MAPQ_FILE_OUT
 	combine_DRF_output.py \
 		$COMBINE_INPUT \
-		$LOW_DEPTH_DIR_OUT \
-		$LOW_MAPQ_DIR_OUT
+		$LOW_DEPTH_FILE_OUT \
+		$LOW_MAPQ_FILE_OUT
 }
 
 # total_lines=$(wc -l $drf_files | awk '{print $1}')
@@ -77,15 +77,15 @@ do
 done
 wait
 
-LOW_DEPTH_DIR_OUT=${RESULT_PREFIX}.combined.dark.low_depth.bed.gz
-LOW_MAPQ_DIR_OUT=${RESULT_PREFIX}.combined.dark.low_mapq.bed.gz
+LOW_DEPTH_FILE_OUT=${RESULT_PREFIX}.combined.dark.low_depth.bed.gz
+LOW_MAPQ_FILE_OUT=${RESULT_PREFIX}.combined.dark.low_mapq.bed.gz
 
-echo -e "chrom\tstart\tend\tavg_nMapQBelowThreshold\tavg_depth\tavg_percMapQBelowThreshold" | pigz --fast -p 1 > $LOW_DEPTH_DIR_OUT
-echo -e "chrom\tstart\tend\tavg_nMapQBelowThreshold\tavg_depth\tavg_percMapQBelowThreshold" | pigz --fast -p 1 > $LOW_MAPQ_DIR_OUT
+echo -e "chrom\tstart\tend\tavg_nMapQBelowThreshold\tavg_depth\tavg_percMapQBelowThreshold" | pigz --fast -p 1 > $LOW_DEPTH_FILE_OUT
+echo -e "chrom\tstart\tend\tavg_nMapQBelowThreshold\tavg_depth\tavg_percMapQBelowThreshold" | pigz --fast -p 1 > $LOW_MAPQ_FILE_OUT
 
 # The files were written via gzip, so can simply be catted together.
-cat ${LOW_DEPTH_DIR}/*  >> $LOW_DEPTH_DIR_OUT
-cat ${LOW_MAPQ_DIR}/*   >> $LOW_MAPQ_DIR_OUT
+cat ${LOW_DEPTH_DIR}/*  >> $LOW_DEPTH_FILE_OUT
+cat ${LOW_MAPQ_DIR}/*   >> $LOW_MAPQ_FILE_OUT
 
 # TODO: Add global setting to determine whether to cleanup scratch.
 # rm -rvf $TMP_DIR

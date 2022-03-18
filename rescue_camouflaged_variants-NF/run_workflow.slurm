@@ -9,4 +9,10 @@
 #SBATCH -A coa_mteb223_uksr 	    				# Project allocation account name (REQUIRED)
 
 module load ccs/java/jdk1.8.0_202
-nextflow run rescue_camo_variants.nf
+nextflow run rescue_camo_variants.nf \
+	-with-report \
+	-with-trace \
+	-with-dag \
+	-with-timeline \
+	-resume
+

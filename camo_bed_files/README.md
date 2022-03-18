@@ -15,6 +15,11 @@ that are in the same camo group and are all camouflaged by each other
 The fifth column shows repeat number for that camo group (i.e., the number of times this 
 camouflaged region is repeated and the number regions listed in column four)
 
+## extraction.bed (previously the 'realign.bed').
+
+Shows which regions should be extracted for realignment. Should be passed as
+input into `samtools view` to extract low quality MAPQ reads from camo regions
+
 
 ## align_to.bed
 
@@ -29,10 +34,6 @@ we don't lose reads on the edge of the camouflaged region, and is then complemen
 (`bedtools complement`) to invert the `.bed` file. The complement is then passed into
 `bedtools maskFasta` to mask the reference.
 
-## extraction.bed (previously the 'realign.bed').
-
-Shows which regions should be extracted for realignment. Should be passed as
-input into `samtools view` to extract low quality MAPQ reads from camo regions
 
 ## GATK.bed
 

@@ -22,9 +22,6 @@ echo "###################################"
 echo "PATH: $PATH"
 echo "###################################"
 
-# Create GATK environment variable for convenience.
-GATK="gatk --java-options -Xmx20G"
-
 # A file with the list of bams to run
 bam_list=$4
 echo "Bam list file: $bam_list"
@@ -52,7 +49,10 @@ done
 # Regex to extract sample name from Bam header
 sample_regex="SM:([A-Za-z0-9_\-]+)"
 
-threads=1
+threads=$7
+
+# Create GATK environment variable for convenience.
+GATK="gatk --java-options -Xmx20G --XX:+UseSerialGC -XX:ParallelGCThreads=${threads}"
 
 # Track first and last sample to provide unique name to final output .gvcf. Cannot
 # use JobID because we don't know which scheduler (if any) will be used. Cannot use
@@ -85,7 +85,7 @@ do
 
 
 	# Extract the sample name from .bam's read group header
-	RG=$(samtools view -H $bam | grep '^@RG' | tail -1)
+	RG=$(lsamtools view -H $bam | grep '^@RG' | tail -1)
 	[[ $RG =~ $sample_regex ]]
 	sampleName=${BASH_REMATCH[1]}
 
@@ -123,10 +123,10 @@ do
 		if [[ -z $regions ]]; then continue; fi #if regions is empty skip 
 
 		# Extract only reads with MapQ < 10
-		time samtools view -h $bam $regions | \
+		time lsamtools view -h $bam $regions | \
 			awk '$5 < 10 || $1 ~ "^@"' | \
-			samtools view -hb - | \
-			samtools sort -n -m 16G -o $tmp_bam -
+			lsamtools view -hb - | \
+			lsamtools sort -n -m 16G -o $tmp_bam -
 
 
 		####################
@@ -147,7 +147,7 @@ do
 		final_bam=${sampleName}.ploidy_${ploidy}.bam
 		# RG="@RG\tID:group1\tSM:$sampleName\tPL:illumina\tLB:lib1\tPU:unit1"
 
-		# Replace literal tab characters with \t so bwa doesn't get angry. The
+		# Replace literal tab characters with '\t' so bwa doesn't get angry. The
 		# double '//' means global search/replace.
 		RG=${RG//$'\t'/"\t"}
 		time bwa mem -M  \
@@ -157,8 +157,8 @@ do
 			$fq1 $fq2 > $aligned_sam
 
 		# Sort and index bam
-		time samtools view -bt $ref $aligned_sam | samtools sort -@ $threads -m 6G -o $final_bam -
-		samtools index $final_bam
+		time lsamtools view -bt $ref $aligned_sam | lsamtools sort -@ $threads -m 6G -o $final_bam -
+		lsamtools index $final_bam
 
 
 		##################

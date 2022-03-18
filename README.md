@@ -66,7 +66,7 @@ did for the ADSP).
 > proper place. This approach dramatically increases the number of regions that will be camouflaged,
 > and thus will be overlooked. i.e., _the more complete and accurate the reference genome becomes,
 > the more regions will be camouflaged when using short-read technologies._ **The real solution to
-> resolving camouflaged regions is to using long-read sequencing platorms (e.g., [Oxford Nanopore
+> resolving camouflaged regions is to use long-read sequencing platorms (e.g., [Oxford Nanopore
 > Technologies](https://nanoporetech.com/) and [PacBio](https://www.pacb.com/)).**
 
 ---

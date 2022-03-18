@@ -1,8 +1,16 @@
 #!/usr/bin/env python3
 import sys
 
-valid_chroms = list(map(str, range(1,23))) + ['X', 'Y', 'MT']
-valid_chroms = set(valid_chroms)
+
+valid_chroms = set(
+                    list(map(str, range(1,23))) + \
+                        ['X', 'Y', 'M', 'MT'] + \
+                        ['chr' + chrom for chrom in map(str, range(1,23))] + \
+                        ['chrX', 'chrY', 'chrM', 'chrMT']
+                   )
+
+
+
 for line in sys.stdin:
 	toks = line.strip().split('\t')
 	chrom = toks[0]

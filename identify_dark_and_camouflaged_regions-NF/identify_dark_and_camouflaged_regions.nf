@@ -75,7 +75,7 @@ params.input_sample_path = "${projectDir}/test_data/ADSP_sample_crams/*"
 
 /*
  * This string can be used to help name the results folder (if provided and included when defining
- * the results parameter. 
+ * the results parameter). 
  */
 params.sample_input_tag = "Test_samples"
 // params.sample_input_tag = "Original_ADSP_samples"
@@ -105,6 +105,11 @@ params.output_format = 'bam'
  * Path to the .gff3 file with all gene and transcript annotations. This MUST be specfic to the
  * 'align_to_ref' that input samples will be re-aligned to, otherwise the results will be entirely
  * erroneous. 
+ *
+ * NOTE: Because gff3 files can come with so many variations, the pipeline currently only works
+ * with .gff3 files from Ensembl. Since Ensembl does not use the 'chr' prefix, the .gff3 file must
+ * be modified to include the 'chr' prefix to each entry if the 'align_to_ref' uses the 'chr'
+ * prefix. The naming convention for the mitochondrial genome must also match (e.g., 'M' vs. 'MT').
  */
 params.align_to_gff = "${projectDir}/../sequencing_resources/annotations/Ensembl/hg38_release_93/Homo_sapiens.GRCh38.93.gff3"
 
@@ -165,6 +170,8 @@ log.info """\
  sequencer_tag                  : ${params.sequencer_tag}
  results_dir                    : ${params.results_dir}
  mask_ref_prefix                : ${params.mask_ref_prefix}
+ DRF_interval_length            : ${params.DRF_interval_length}
+ DRF_jar                        : ${params.DRF_jar}
  """
 
 
@@ -198,17 +205,44 @@ workflow{
     file_prefix = "${params.sequencer_tag}.${params.align_to_ref_tag}"
 
     /*
-     * Step 01: Realign input sample files
+     * Only re-align if the original and align_to refs are different.
      */
-	REALIGN_SAMPLES_WF(params.input_sample_path)
+//    if(params.original_ref != params.align_to_ref){
 
-    /*
-     * Step 02: Run 'Dark Region Finder' to create summary statistics for every
-     * position in the 'align_to_ref'. This process is split into a different
-     * process for each input sample file and genome intervals of size
-     * 'params.DRF_interval_length'.
-     */
- 	RUN_DRF_WF(REALIGN_SAMPLES_WF.out, params.DRF_interval_length)
+        /*
+         * Step 01: Realign input sample files
+         */
+        REALIGN_SAMPLES_WF(params.input_sample_path)
+
+        /*
+         * Step 02: Run 'Dark Region Finder' to create summary statistics for every
+         * position in the 'align_to_ref'. This process is split into a different
+         * process for each input sample file and genome intervals of size
+         * 'params.DRF_interval_length'.
+         */
+        RUN_DRF_WF(REALIGN_SAMPLES_WF.out, params.DRF_interval_length)
+//    }
+//    else {
+//
+//        /*
+//         * Create sample input tuples
+//         */
+//
+//        println "Input path: ${params.input_sample_path}"
+//        Channel.fromPath(params.input_sample_path, checkIfExists: true)
+//            | map { print it; tuple( it.baseName, it ) }
+//            | view()
+//            | set { sample_input_files_ch }
+//
+//        Channel.fromPath("${params.input_sample_path}.{bai,cai,crai}", checkIfExists: true)
+//            | map { tuple( it.baseName, it ) }
+//            | view()
+//            | set { sample_input_indexes_ch }
+//
+//        System.exit(0)
+//
+//        RUN_DRF_WF(sample_input_files_ch, params.DRF_interval_length)
+//    }
  
 
     /*

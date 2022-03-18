@@ -26,46 +26,52 @@ fi
 # We chose to select the largest of the gene definitions for any given gene (based on start
 # and end. This will also include all transcripts from that gene definition.
 FILTERED_GFF3="${TMP}/${base//.gff3/.filtered.gff3}"
-# echo "`date` awk '\$9 ~ \"^ID=gene:\"' $GFF3 | bedtools cluster -s | filter_gff3.py $GFF3 > $FILTERED_GFF3"
-# TODO: Keep an eye on whether the added sort causes a problems for reference genomes
+
+# TODO: Keep an eye on whether the added sort causes problems for reference genomes
 # where chromosomes are sorted numerically rather than ascii-betically. 
 awk '$9 ~ "^ID=gene:"' $GFF3 | \
 	bedtools cluster -s | \
 	filter_gff3.py $GFF3 | \
-	sort -k1,1 -k4,4n > $FILTERED_GFF3
+	sort -k1,1 -k4,4n > $FILTERED_GFF3 \
+	|| {
+			echo "ERROR (`date`): Failed to create filtered .gff3 file. See log for details"
+		}
+
 
 # Isolate just the gene lines from the filtered GFF into a single
 # genes GFF file.
 genes="${TMP}/${base//.gff3/.justGenes.bed}"
-# echo "`date` awk '\$9 ~ \"^ID=gene:\"' $FILTERED_GFF3 > $genes"
 awk '$9 ~ "^ID=gene:" {print $1"\t"$4"\t"$5"\t"$3"\t"$6"\t"$7"\t"$9}' $FILTERED_GFF3 > $genes
 
 # Isolate just the CDS lines from the filtered GFF
 CDS="${TMP}/${base//.gff3/.cds.gff3}"
-# echo "`date` awk '\$3 == \"CDS\"' $FILTERED_GFF3 | sort -k1,1 -k4,4n > $CDS"
 awk '$3 == "CDS"' $FILTERED_GFF3 | \
-	sort -k1,1 -k4,4n > $CDS
+	sort -k1,1 -k4,4n > $CDS \
+	|| {
+			echo "ERROR (`date`): Failed to create CDS .gff3 file. See log for details"
+		}
 
 # Isolate just the UTRs from the filtered GFF. In this case, however, we also
 # subtract the CDS regions from the UTRs. i.e., because the CDS region is
 # considered CDS in at least one transcript, we will always treat it as CDS
 # and NOT a UTR.
 UTRs="${TMP}/${base//.gff3/.utrs.bed}"
-# echo "`date` awk '\$3 ~ \"UTR\"' $FILTERED_GFF3 | sort -k1,1 -k4,4n |  bedtools merge -c 3,6,7 -o distinct  > $UTRs"
 awk '$3 ~ "UTR"' $FILTERED_GFF3 | \
 	sort -k1,1 -k4,4n | \
 	bedtools merge -s -c 3,6,7 -o distinct | \
 	bedtools subtract \
 		-a - \
 		-b $CDS \
-		-s > $UTRs
+		-s > $UTRs \
+	|| {
+			echo "ERROR (`date`): Failed to create UTR .gff3 file. See log for details"
+		}
 
 # Isolate just the exons (including UTRs) from the filtered GFF. In this case,
 # we give preference to UTRs since CDS was given preference in the previous
 # command. i.e., If we want to be able to look at all UTRs, this is all
 # inclusive.
 exons="${TMP}/${base//.gff3/.justExons.bed}"
-# echo "`date` awk '$\3 == \"exon\"' $FILTERED_GFF3 |  sort -k1,1 -k4,4n |  bedtools merge -c 3,6,7 -o distinct |  bedtools subtract  -a -  -b $UTRs  |  cat - $UTRs |  sort -k1,1 -k2,2n -k3,3n > $exons"
 awk '$3 == "exon"' $FILTERED_GFF3 | \
 	sort -k1,1 -k4,4n | \
 	bedtools merge -s -c 3,6,7 -o distinct | \
@@ -73,17 +79,22 @@ awk '$3 == "exon"' $FILTERED_GFF3 | \
 		-a - \
 		-b $UTRs | \
 	cat - $UTRs | \
-	sort -k1,1 -k2,2n -k3,3n > $exons
+	sort -k1,1 -k2,2n -k3,3n > $exons \
+	|| {
+			echo "ERROR (`date`): Failed to create exon .gff3 file. See log for details"
+		}
 
 annotation_bed=${base//.gff3/.annotation.bed}
-# echo "`date` bedtools intersect  -a $genes -b $exons -loj > test.txt python prepare_gene_level_gtf.py  > $annotation_bed"
 
 # Create a single GFF file that contains individual entries for every
 # exon for a given gene, including all gene annotations. These annotations
 # are not included in the exons file. 
 bedtools intersect  -a $genes -b $exons -s -loj | \
 	sort -k1,1 -k2,2n -k9,9n | \
-	prepare_annotation_bed.py > $annotation_bed
+	prepare_annotation_bed.py > $annotation_bed \
+	|| {
+			echo "ERROR (`date`): Failed to create annotation .bed file. See log for details"
+		}
 
 # Check that $annotation_bed is not empty. Fail, if so.
 anno_lines=$(cat $annotation_bed | wc -l)
