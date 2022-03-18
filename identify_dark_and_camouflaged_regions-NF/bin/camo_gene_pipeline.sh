@@ -100,10 +100,10 @@ blat_log="blat_log/tmp.blat.log"
 blat_bed=${blat_result//psl/bed}
 mapped_blat_results="query.results.filtered.mapped.txt"
 camo_bed="tmp_camo.bed"
-align_to="tmp_align_to.bed"
+mask_bed="tmp_mask_bed.bed"
 extraction="tmp_extraction.bed"
 camo_sorted="tmp_camo.sorted.bed"
-alignto_sorted="${SEQUENCER}.${GVERS}.camo.align_to.sorted.bed"
+alignto_sorted="${SEQUENCER}.${GVERS}.camo.mask_bed.sorted.bed"
 extraction_sorted="${SEQUENCER}.${GVERS}.camo.extraction.sorted.bed"
 gatk_bed_all="${SEQUENCER}.${GVERS}.camo.GATK.all_camo_regions.bed"
 gatk_bed_CDS_only="${SEQUENCER}.${GVERS}.camo.GATK.CDS_regions_only.bed"
@@ -447,12 +447,12 @@ bedtools intersect \
 ## From the scored intersected blat output, calculates the maps
 ## of which camo regions align to which other ones, and creates camo sets
 # lists all the regions in a camo set in the extraction file and selects the one region form that set that we 
-## will use to align to (written in the align_to file, all other regions in set will be masked)
+## will use to align to (written in the mask_bed file, all other regions in set will be masked)
 if ! extract_camo_regions.py \
 	$mapq_annotations \
 	$mapped_blat_results \
 	$extraction \
-	$align_to \
+	$mask_bed \
 	$camo_bed; then
 	echo "ERROR: `date` extract_camo_regions.py failed."
 	exit 1
@@ -479,8 +479,8 @@ bedtools sort -i $camo_bed -faidx $faidx | \
 
 
 
-if ! bedtools sort -i $align_to -faidx $faidx > $alignto_sorted; then
-	echo "ERROR: `date` bedtools sort failed for $align_to."
+if ! bedtools sort -i $mask_bed -faidx $faidx > $alignto_sorted; then
+	echo "ERROR: `date` bedtools sort failed for $mask_bed."
 	exit 1
 fi
 if ! bedtools sort -i $extraction  -faidx $faidx > $extraction_sorted; then
@@ -510,8 +510,8 @@ bedtools intersect \
 # fi
 
 ## Create GATK bed: bed that will give regions were camo variants will be called
-## The GATK bed is the CDS align_to regions that are exclusively camo,
-## The normal align_to lists the whole genebody element, GATK restricts to just those camo regions
+## The GATK bed is the CDS mask_bed regions that are exclusively camo,
+## The normal mask_bed lists the whole genebody element, GATK restricts to just those camo regions
 grep -vE "^#" $camo_annotations | \
 	awk '$5 == "CDS"' | \
 	bedtools intersect \
@@ -525,8 +525,8 @@ grep -vE "^#" $camo_annotations | \
 
 
 ## Create GATK bed for all camo regions: bed that will give regions were camo variants will be called
-## The GATK bed is for all align_to camo regions (not just CDS) that are exclusively camo,
-## The normal align_to lists the whole genebody element, GATK restricts to just those camo regions
+## The GATK bed is for all mask_bed camo regions (not just CDS) that are exclusively camo,
+## The normal mask_bed lists the whole genebody element, GATK restricts to just those camo regions
 grep -vE "^#" $camo_annotations | \
 	bedtools intersect \
 		-a $alignto_sorted \

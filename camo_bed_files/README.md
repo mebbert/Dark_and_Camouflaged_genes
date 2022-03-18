@@ -21,18 +21,18 @@ Shows which regions should be extracted for realignment. Should be passed as
 input into `samtools view` to extract low quality MAPQ reads from camo regions
 
 
-## align_to.bed
+## mask.bed (previously the 'align_to.bed')
 
-The `align_to.bed` is used to mask all but one of the identical regions for each set of
-identical regions; we call it the "align_to" bed because it contains the regions that 
-will be left *unmasked*. Essientially, it includes the one region (semi-randomly selected)
-in each camo group where all reads for that group of identical sequence should align. This
-removes alignment ambiguity for the aligner so that the reads get a strong mapping quality
-(MAPQ), making it possible to call variants for those regions (all treated as one). To mask
-the genome, the `align_to.bed` file is first expanded by 50 bp (`bedtools slop`) to ensure
-we don't lose reads on the edge of the camouflaged region, and is then complemented
-(`bedtools complement`) to invert the `.bed` file. The complement is then passed into
-`bedtools maskFasta` to mask the reference.
+The `mask.bed` (previously the `align_to.bed`) is used to mask all but one of the identical
+regions for each set of identical regions; we previously called it the "align_to" bed because
+it contains the regions that will be left *unmasked*. Essientially, it includes the one region
+(semi-randomly selected) in each camo group where all reads for that group of identical
+sequence should align. This removes alignment ambiguity for the aligner so that the reads get
+a strong mapping quality (MAPQ), making it possible to call variants for those regions (all
+treated as one). To mask the genome, the `mask.bed` (a.k.a., `align_to.bed`) file is first
+expanded by 50 bp (`bedtools slop`) to ensure we don't lose reads on the edge of the
+camouflaged region, and is then complemented (`bedtools complement`) to invert the `.bed` file.
+The complement is then passed into `bedtools maskFasta` to mask the reference.
 
 
 ## GATK.bed

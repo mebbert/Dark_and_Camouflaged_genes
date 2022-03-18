@@ -18,21 +18,43 @@ def sdf = new SimpleDateFormat("yyyy_MM_dd-HH.mm.ss")
 def time_stamp = sdf.format(date)
 
 /*
- * The original and UNMASKED reference that the samples are currently aligned to.
- * This will be used to identify false-positive variants in the rescued variant
- * VCF files. These false positives are the result of 'reference-based artifacts',
- * which we describe in the paper and in notes for the respective NextFlow process.
+ * Path to the .bed file defining regions to extract reads from
+ * (i.e., the camouflaged regions). This MUST contain coordinates based on the
+ * reference the input samples are *currently* aligned to. It matters where the
+ * reference was obtained from (i.e., NCBI, Ensembl, UCSC, etc.); they are NOT
+ * necessarily interchangeable! While coordinates for a given gene will remain
+ * the same for a given genome build (e.g., GRCh38), WHICH regions are
+ * camouflaged will change depending on which contigs are included in the
+ * reference. There are also other more minor (but super annoying) differences
+ * between builds (e.g., chromsome naming and even sorting).
+ *
+ * We provide .bed files for the following human reference genomes:
+ *   1. TODO: List reference genomes we provide camo beds for.
+ *
+ * If working with a reference genome (from any organism) that we have not
+ * already identified camouflaged regions for, it can be prepared using our
+ * pipeline for identifying camouflaged regions (de novo).
  */
-params.unmasked_ref_fasta = "${projectDir}/../references/GRCh38_no_alt_plus_hs38d1/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna"
+params.extraction_bed = "${projectDir}/test_data/CR1-extraction-1KG_ref.bed"
+
 
 /*
- * The MASKED reference to be *RE-ALIGNED TO*; this should be the same reference
- * as the `unmasked_ref_fasta`, except it needs to have been prepared (i.e., masked)
- * using our pipeline to identify dark and camouflaged regions. If the reference
- * provided here has not been masked for camouflaged regions, we cannot rescue camouflaged
- * variants.
+ * The MASKED reference to be *RE-ALIGNED TO*; this could be any reference,
+ * except it must have been prepared (i.e., masked) using our pipeline to
+ * identify dark and camouflaged regions. If the reference provided here has
+ * not been masked for camouflaged regions, rescuing camouflaged variants will
+ * not work.
  */
 params.masked_ref_fasta = "${projectDir}/results/MASK_GENOME/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.fa"
+
+/*
+ * The UNMASKED version of the above reference that the samples will be aligned
+ * to. This will be used to identify false-positive variants in the rescued variant
+ * VCF files. These false positives are the result of what we termed 
+ * 'reference-based artifacts', which we describe in the paper and in notes
+ * for the respective NextFlow process.
+ */
+params.unmasked_ref_fasta = "${projectDir}/../references/GRCh38_no_alt_plus_hs38d1/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna"
 
 /*
  * A 'tag' to describe the reference genome. This is used for naming output
@@ -54,35 +76,23 @@ params.input_sample_path = "${projectDir}/test_data/UKY_ADSP_crams"
  */
 params.sample_input_tag = "Test_samples"
 
-
 /*
- * Path to the .bed file defining regions to extract reads from for samples
- * (i.e., the camouflaged regions). This MUST contain coordinates based on the
- * reference the samples are *currently* aligned to. It matters where the
- * reference was obtained from (i.e., NCBI, Ensembl, UCSC, etc.); they are NOT
- * interchangeable! The camouflaged regions will change depending on which
- * contigs are included in the reference. There are also other more minor
- * (but super annoying) differences between builds (e.g., chromsome naming
- * and even sorting).
+ * Path to the 'mask.bed' file (previously knwown as the 'align_to' .bed file).
+ * This .bed file was used to mask the reference genome, leaving only one unique
+ * camouflaged region per set of camouflaged regions. The one unmasked
+ * camouflaged remaining has also been expanded by 50bp on each side to allow
+ * reads to align at the end of the camouflaged region. 
  *
- * We provide .bed files for the following human reference genomes:
- *   1. TODO: List reference genomes we provide camo beds for.
+ * In this pipeline, however, the 'mask.bed' is used to help identify
+ * reference-based artifacts (i.e., false-positive variants); it's needed for
+ * BLAT. 
  *
- * If working with a reference genome (from any organism) that we have not
- * already identified camouflaged regions for, it can be prepared using our
- * pipeline for identifying camouflaged regions (de novo).
- */
-params.extraction_bed = "${projectDir}/test_data/CR1-extraction-1KG_ref.bed"
-
-/*
- * Path to the 'align_to' .bed file. This is used to focus on just the camoflaged
- * regions in the NextFlow process that identifies false-positive variants.
- * This .bed file comes from the `CREATE_BED_FILE` process in the
+ * This .bed file comes from the `05-CREATE_BED_FILE` process in the
  * `Identify Dark and Camouflaged Regions` NextFlow workflow. This .bed file
- * must be specific to the reference genome being used in the `unmasked_ref_fasta`
- * argument.
+ * must have coordinates specific to the reference genome being used in the
+ * 'masked_ref_fasta' and the `unmasked_ref_fasta` arguments.
  */
-params.align_to_bed = "${projectDir}/test_data/illuminaRL100.hg38.camo.align_to.sorted.bed"
+params.mask_bed = "${projectDir}/test_data/illuminaRL100.hg38.camo.align_to.sorted.bed"
 
 /*
  * Path to the .bed file that GATK will use to call variants. This MUST
@@ -90,20 +100,26 @@ params.align_to_bed = "${projectDir}/test_data/illuminaRL100.hg38.camo.align_to.
  * aligned to in this pipeline. This can be the same reference *VERSION* the
  * samples were previously aligned to, but it must be masked. This .bed file
  * is similar to the 'align_to.bed' file used to mask the genome, except it is
- * restricted to the coding (CDS) regions within the camouflaged region,
- * rather than the entire camouflaged region.
+ * restricted to the exact camouflaged regions rather than the expanded
+ * camouflaged region needed for alignment (i.e., so reads can align to the
+ * end of a camouflaged region).
+ *
+ * This .bed file should be either the *CDS_regions_only* or the *all_camo_regions*
+ * .bed file from step 05-CREATE_BED_FILE in the workflow to define camouflaged
+ * regions.
  *
  * We provide the appropriate GATK .bed files for the same human reference
  * genomes as the extraction_bed.
  *
  * TODO: all camo or just CDS? Was previously only CDS.
  */
-params.gatk_bed = "${projectDir}/test_data/CR1-GATK-1KG_ref.bed"
+params.gatk_bed = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_03_10-18.31.18/05-CREATE_BED_FILE/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.camo.GATK.all_camo_regions.bed"
 
 /*
- * 
+ * This is the *.camo_annotations.txt file that comes from the step
+ * 05-CREATE_BED_FILE in the workflow to define camouflaged regions.
  */
-params.camo_annotations = "${projectDir}/test_data/illuminaRL100.hg38.camo.align_to.sorted.bed"
+params.camo_annotations = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_03_10-18.31.18/05-CREATE_BED_FILE/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.camo_annotations.txt"
 
 /*
  * Define the number of samples to run in a single rescue batch. This can
@@ -121,6 +137,16 @@ params.n_samples_per_batch = 50
  * variable "${projectDir}" (e.g., '${projectDir}/').
  */
 params.results_dir = "./results/${params.masked_ref_tag}_${params.sample_input_tag}-${time_stamp}"
+
+/*
+ * Define which gene region elements to rescue variants for. Possible options
+ * include "all" or "CDS", where "all" will rescue variants in any gene body
+ * element (e.g., including introns and UTR regions) and "CDS will only rescue
+ * variants in protein-coding regions.
+ *
+ * TODO: Make the pipeline also rescue variants *outside* of known gene bodies.
+ */
+params.rescue_gene_elements = "all"
 
 /*
  * The max number of repeat regions to rescue. Some genomic sequences are
@@ -166,7 +192,7 @@ log.info """\
  sample input tag                  : ${params.sample_input_tag}
  extraction bed                    : ${params.extraction_bed}
  GATK bed                          : ${params.gatk_bed}
- align to bed                      : ${params.align_to_bed}
+ align to bed                      : ${params.mask_bed}
  camo annotations                  : ${params.camo_annotations}
  n samples per batch               : ${params.n_samples_per_batch}
  results dir                       : ${params.results_dir}

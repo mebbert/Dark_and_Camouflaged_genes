@@ -1,0 +1,1 @@
+../../identify_dark_and_camouflaged_regions-NF/bin/run_DRF.sh

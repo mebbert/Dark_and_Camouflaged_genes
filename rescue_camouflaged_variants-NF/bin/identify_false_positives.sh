@@ -5,10 +5,11 @@ set -x
 echo "Job running on: `hostname`"
 
 CAMO_ANNOTATION=$1
-ALIGN_TO=$2
-REF=$3
-OUT_FILE=$4
-NUM_THREADS=$5
+INCLUDE_REGIONS=$2
+MASK_BED=$3
+REF=$4
+OUT_FILE=$5
+NUM_THREADS=$6
 
 query="./query/mapq_genes.query.fa"
 blat_result="./blat_result/blat.results.psl"
@@ -16,21 +17,46 @@ blat_log="./blat_log/tmp.blat.log"
 blat_bed=${blat_result//psl/bed}
 false_positives="false_positives.txt"
 
+################################################
+# Create BLAT queries from camouflaged regions #
+################################################
+
 mkdir -p "query"
-if ! grep -vE "^#" $CAMO_ANNOTATION | \
-	awk '$5 == "CDS"' | \
-	bedtools intersect \
-		-a - \
-		-b $ALIGN_TO \
-		-wb | \
-		awk '$NF <= 5' | \
-		bedtools getfasta \
-			-fi $REF \
-			-bed - \
-			-name+ \
-			-fo $query; then
-	echo "`date` bedtools intersect failed for $CAMO_ANNOTATION and $ALIGN_TO"
-	exit 1
+if [[ "${INCLUDE_REGIONS,,}" == "cds" ]]; then
+
+	# Only awk out CDS regions (i.e., only include CDS)
+	if ! grep -vE "^#" $CAMO_ANNOTATION | \
+		awk '$5 == "CDS"' | \
+		bedtools intersect \
+			-a - \
+			-b $MASK_BED \
+			-wb | \
+			awk '$NF <= 5' | \
+			bedtools getfasta \
+				-fi $REF \
+				-bed - \
+				-name+ \
+				-fo $query; then
+		echo "`date` bedtools intersect failed for $CAMO_ANNOTATION and $MASK_BED"
+		exit 1
+	fi
+else
+
+	# Do NOT awk out CDS regions (i.e., use all)
+	if ! grep -vE "^#" $CAMO_ANNOTATION | \
+		bedtools intersect \
+			-a - \
+			-b $MASK_BED \
+			-wb | \
+			awk '$NF <= 5' | \
+			bedtools getfasta \
+				-fi $REF \
+				-bed - \
+				-name+ \
+				-fo $query; then
+		echo "`date` bedtools intersect failed for $CAMO_ANNOTATION and $MASK_BED"
+		exit 1
+	fi
 fi
 
 nLines=$(wc -l $query | awk '{print $1}')

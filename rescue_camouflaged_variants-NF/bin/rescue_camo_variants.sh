@@ -191,6 +191,7 @@ do
 	done
 done < $bam_list
 
+
 #####################################
 # Combine gVCFs for each ploidy set #
 #####################################
