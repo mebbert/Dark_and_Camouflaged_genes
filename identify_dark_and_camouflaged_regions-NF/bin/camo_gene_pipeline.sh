@@ -144,10 +144,6 @@ mapq_not_camo="${SEQUENCER}.${GVERS}.low_mapq.NOT_camo.bed"
 # Calculate the mean, median depth (column 5).                                    #
 ###################################################################################
 # Swallow 141 (SIGPIPE) because remove_unassembled_contigs.py closes pipe abruptly.
-# Bedtools is supposed to auto-detect .gz files. Version 2.30.0 has a bug passing
-# a .gz directly, so we are pigz-ing it into Bedtools. The issue has been fixed in
-# `master`, but we're still using 2.30.0. See the following link for details:
-# https://github.com/arq5x/bedtools2/issues/975
 # time pigz -dcp 4 $DEPTH_BED | bedtools merge -d 20 -c 5 -o mean,median -i stdin | \
 # time bedtools merge -d 20 -c 5 -o mean,median -i $DEPTH_BED | \
 
