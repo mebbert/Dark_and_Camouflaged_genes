@@ -372,7 +372,7 @@ do
 
 			# At least this process is still running, so keep waiting
 			keep_waiting=true
-			echo "Waiting on blat (PID: $pid)..."
+			echo "(`date`) Waiting on blat (PID: $pid)..."
 		fi
 	done
 
