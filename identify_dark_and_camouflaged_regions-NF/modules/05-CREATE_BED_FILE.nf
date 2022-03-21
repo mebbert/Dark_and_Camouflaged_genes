@@ -14,7 +14,7 @@ process CREATE_BED_FILE_PROC {
 		path(annotation_bed)
 
 	output:
-		path("*align_to.sorted.bed"), emit: align_to_bed
+		path("*mask_bed.sorted.bed"), emit: mask_bed
 		path "*" 
 
 	script:

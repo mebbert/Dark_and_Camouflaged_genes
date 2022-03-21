@@ -145,13 +145,14 @@ mapq_not_camo="${SEQUENCER}.${GVERS}.low_mapq.NOT_camo.bed"
 ###################################################################################
 # Swallow 141 (SIGPIPE) because remove_unassembled_contigs.py closes pipe abruptly.
 # Bedtools is supposed to auto-detect .gz files. Version 2.30.0 has a bug passing
-# a .gz directly, so we are zcat-ing it into Bedtools. The issue has been fixed in
+# a .gz directly, so we are pigz-ing it into Bedtools. The issue has been fixed in
 # `master`, but we're still using 2.30.0. See the following link for details:
 # https://github.com/arq5x/bedtools2/issues/975
-# time zcat $DEPTH_BED | bedtools merge -d 20 -c 5 -o mean,median -i stdin | \
+# time pigz -dcp 4 $DEPTH_BED | bedtools merge -d 20 -c 5 -o mean,median -i stdin | \
+# time bedtools merge -d 20 -c 5 -o mean,median -i $DEPTH_BED | \
 
 # print header line
-echo "#chrom\tstart\tend\tmean depth\tmedian depth" > ${depth_merged}
+echo -e "#chrom\tstart\tend\tmean depth\tmedian depth" > ${depth_merged}
 time bedtools merge -d 20 -c 5 -o mean,median -i $DEPTH_BED | \
 	remove_unassembled_contigs.py | \
 	awk '{ if($3 - $2 > 20) print $0}' \
@@ -180,10 +181,11 @@ TMPSTATUS=("${PIPESTATUS[@]}")
 # Calculate the mean, median depth (column 5).                                   #
 ##################################################################################
 # Swallow 141 (SIGPIPE) because remove_unassembled_contigs.py closes pipe abruptly.
-# time zcat $MAPQ_BED | bedtools merge -d 20 -c 5 -o mean,median -i stdin | \
+# time bedtools merge -d 20 -c 5 -o mean,median -i $MAPQ_BED | \
+# time pigz -dcp 4 $MAPQ_BED | bedtools merge -d 20 -c 5 -o mean,median -i stdin | \
 
 # print header line
-echo "#chrom\tstart\tend\tmean depth\tmedian depth" > ${mapq_merged}
+echo -e "#chrom\tstart\tend\tmean depth\tmedian depth" > ${mapq_merged}
 time bedtools merge -d 20 -c 5 -o mean,median -i $MAPQ_BED | \
 	remove_unassembled_contigs.py | \
 	awk '{ if($3 - $2 > 20) print $0}' \

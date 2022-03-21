@@ -273,6 +273,6 @@ workflow{
      * variants from camouflaged regions in existing short-read sequencing data
      * sets.
      */
-    MASK_GENOME_PROC(CREATE_BED_FILE_PROC.out.align_to_bed, file_prefix)
+    MASK_GENOME_PROC(CREATE_BED_FILE_PROC.out.mask_bed, file_prefix)
 
 }

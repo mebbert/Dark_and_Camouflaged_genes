@@ -9,7 +9,7 @@ process MASK_GENOME_PROC {
 	label 'MASK_GENOME_PROC'
 
 	input:
-		path(align_to_bed)
+		path(mask_bed)
 		val(mask_ref_prefix)
 
 	output:
@@ -19,6 +19,6 @@ process MASK_GENOME_PROC {
 
 	script:
 		"""
-		bash create_camo_mask.sh $align_to_bed $params.align_to_ref $mask_ref_prefix
+		bash create_camo_mask.sh $mask_bed $params.align_to_ref $mask_ref_prefix
 		"""
 }

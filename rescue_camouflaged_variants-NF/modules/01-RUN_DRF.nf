@@ -26,13 +26,13 @@ workflow RUN_DRF_WF {
         /*
          * Create intervals to split DRF jobs across intervals
          */
-        intervals = create_intervals( params.align_to_ref, params.interval_length )
+        intervals = create_intervals( params.current_ref_fasta, params.DRF_interval_length )
 
-        intervals_file = file( "${params.align_to_ref_tag}.DRF_intervals.txt" )
-        intervals_file.delete()
-        intervals.each {
-            intervals_file << "${it}\n"
-        }
+//        intervals_file = file( "${params.current_ref_fasta_tag}.DRF_intervals.txt" )
+//        intervals_file.delete()
+//        intervals.each {
+//            intervals_file << "${it}\n"
+//        }
 
         // intervals = ['1:10000-20000', '1:207496157-207641765',
         //                 '5:55555-66666', '22:15693544-15720708']
@@ -89,7 +89,7 @@ process RUN_DRF_PROC {
 	bash run_DRF.sh \\
         ${sample_name} \\
         ${sample_input_file} \\
-        ${params.align_to_ref} \\
+        ${params.current_ref_fasta} \\
         ${params.DRF_jar} \\
         ${interval}
 	"""
@@ -127,7 +127,7 @@ process COMBINE_SAMPLE_DRF_FILES_PROC {
     
     """
     combine_DRF_sample_output.py \\
-        $params.align_to_ref \\
+        $params.current_ref_fasta \\
         \$PWD \\
         $combined_output_file_name
     """

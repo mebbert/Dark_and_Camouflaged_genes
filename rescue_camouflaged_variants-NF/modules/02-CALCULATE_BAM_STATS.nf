@@ -11,10 +11,13 @@ workflow CALCULATE_BAM_STATS_WF {
 
     main:
         
-        sample_tuple = tuple( sample_DRF_output_file.baseName, sample_DRF_output_file )
-        GENERATE_LOW_MAPQ_AND_DEPTH_BEDS( sample_tuple )
-            | MERGE_DARK_REGIONS_PROC
-            | CALC_BAM_STATS_PROC
+        sample_DRF_output_file.map { println "############it: $it" }
+//        sample_DRF_output_file_ch = Channel.of( file(sample_DRF_output_file) )
+//            | map { tuple( it.baseName, it ) }
+
+//        GENERATE_LOW_MAPQ_AND_DEPTH_BEDS_PROC( sample_tuple )
+//            | MERGE_DARK_REGIONS_PROC
+//            | CALC_BAM_STATS_PROC
 
     emit:
         MERGE_DARK_REGIONS_PROC.collect()
@@ -28,8 +31,12 @@ process GENERATE_LOW_MAPQ_AND_DEPTH_BEDS_PROC {
         tuple val(sample_name), path(sample_DRF_output_file)
 
     output:
-        tuple val(sample_name), path('*.dark.low_depth.bed.gz'), emit: low_depth_out
-        tuple val(sample_name), path('*.dark.low_mapq.bed.gz'), emit: low_mapq_out
+        tuple val(sample_name),
+                path('*.dark.low_depth.bed.gz'),
+                emit: low_depth_out
+        tuple val(sample_name),
+                path('*.dark.low_mapq.bed.gz'),
+                emit: low_mapq_out
 
     script:
     
@@ -40,7 +47,7 @@ process GENERATE_LOW_MAPQ_AND_DEPTH_BEDS_PROC {
     low_mapq = sample_DRF_output_file.name.replaceFirst('.bed.gz', 'low_mapq.bed.gz')
 
     """
-    combine_DRF_output.py ${sample_DRF_output_file} ${sample_DRF_output_file}
+    combine_DRF_output.py "${sample_DRF_output_file}" "${low_depth}" "${low_mapq}"
     """
 }
 
@@ -69,18 +76,20 @@ process MERGE_DARK_REGIONS_PROC {
     script:
 
     merged_file = dark_region_file.contains("low_depth.bed.gz") ?
-            dark_region_file.replaceFirst("low_depth.bed.gz", "low_depth-merged.bed")
+                    dark_region_file.replaceFirst("low_depth.bed.gz", "low_depth-merged.bed") :
+                    dark_region_file.replaceFirst("low_mapq.bed.gz", "low_mapq-merged.bed")
+
     """
 
     ##################################################################################
     # Merge coordinates for depth bed, removing regions that are less than 20bp long #
     ##################################################################################
     # Swallow 141 (SIGPIPE) because remove_unassembled_contigs.py closes pipe abruptly.
-    time bedtools merge -d 20 -c 5 -o mean,median -i ${dark_region_file} | \
-        remove_unassembled_contigs.py | \
-        awk '{ if($3 - $2 > 20) print $0}' \
-        > ${merged_file} \
-        || if [[ $? -eq 141 ]]; then  # Swallow 141 (SIGPIPE)
+    time bedtools merge -d 20 -c 5 -o mean,median -i ${dark_region_file} | \\
+        remove_unassembled_contigs.py | \\
+        awk '{ if(\$3 - \$2 > 20) print \$0}' \\
+        > ${merged_file} \\
+        || if [[ \$? -eq 141 ]]; then  # Swallow 141 (SIGPIPE)
                 true
             else
                 echo "ERROR (`date`): Failed to merge coordinates for ${dark_region_file}. See log for details."

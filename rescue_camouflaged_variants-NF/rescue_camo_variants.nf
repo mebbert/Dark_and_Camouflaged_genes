@@ -18,6 +18,13 @@ def sdf = new SimpleDateFormat("yyyy_MM_dd-HH.mm.ss")
 def time_stamp = sdf.format(date)
 
 /*
+ * Path to the .fasta the input samples are *currently* aligned to. This is used
+ * to run DRF to assess the sample's quality and nature (e.g., if it's exome,
+ * whole genome, etc.).
+ */
+params.current_ref_fasta = "${projectDir}/../references/1KGenomes_hg38-2015/GRCh38_full_analysis_set_plus_decoy_hla.fa"
+
+/*
  * Path to the .bed file defining regions to extract reads from
  * (i.e., the camouflaged regions). This MUST contain coordinates based on the
  * reference the input samples are *currently* aligned to. It matters where the
@@ -45,7 +52,8 @@ params.extraction_bed = "${projectDir}/test_data/CR1-extraction-1KG_ref.bed"
  * not been masked for camouflaged regions, rescuing camouflaged variants will
  * not work.
  */
-params.masked_ref_fasta = "${projectDir}/results/MASK_GENOME/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.fa"
+params.masked_ref_fasta = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_03_10-18.31.18/06-MASK_GENOME/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.fa"
+
 
 /*
  * The UNMASKED version of the above reference that the samples will be aligned
@@ -54,21 +62,21 @@ params.masked_ref_fasta = "${projectDir}/results/MASK_GENOME/GCA_000001405.15_GR
  * 'reference-based artifacts', which we describe in the paper and in notes
  * for the respective NextFlow process.
  */
-params.unmasked_ref_fasta = "${projectDir}/../references/GRCh38_no_alt_plus_hs38d1/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna"
+params.unmasked_ref_fasta = "${projectDir}/../references/1KGenomes_hg38-2015/GRCh38_full_analysis_set_plus_decoy_hla.fa"
 
 /*
  * A 'tag' to describe the reference genome. This is used for naming output
  * in the NextFlow process that identifies false positives (a.k.a.
  * reference-based artifacts).
  */
-params.masked_ref_tag = 'NCBI_GRCh38_no_alt_plus_hs38d1_analysis_set'
+params.masked_ref_tag = '1KGenomes_GRCh38_full_analysis_set_plus_decoy_hla'
 
 
 /*
  * Path to input bams for rescuing camouflaged variants. Must be an absolute
  * path (not relative).
  */
-params.input_sample_path = "${projectDir}/test_data/UKY_ADSP_crams"
+params.input_sample_path = "${projectDir}/test_data/UKY_ADSP_test_crams"
 
 /*
  * This string can be used to help name the results folder (if provided and included when defining
@@ -92,7 +100,7 @@ params.sample_input_tag = "Test_samples"
  * must have coordinates specific to the reference genome being used in the
  * 'masked_ref_fasta' and the `unmasked_ref_fasta` arguments.
  */
-params.mask_bed = "${projectDir}/test_data/illuminaRL100.hg38.camo.align_to.sorted.bed"
+params.mask_bed = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_03_10-18.31.18/05-CREATE_BED_FILE/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.camo.align_to.sorted.bed"
 
 /*
  * Path to the .bed file that GATK will use to call variants. This MUST
@@ -111,9 +119,10 @@ params.mask_bed = "${projectDir}/test_data/illuminaRL100.hg38.camo.align_to.sort
  * We provide the appropriate GATK .bed files for the same human reference
  * genomes as the extraction_bed.
  *
- * TODO: all camo or just CDS? Was previously only CDS.
+ * TODO: Was previously only CDS. Currently adding support for all gene-body
+ * elements, but we still ignore anything outside of gene bodies.
  */
-params.gatk_bed = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_03_10-18.31.18/05-CREATE_BED_FILE/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.camo.GATK.all_camo_regions.bed"
+params.gatk_bed = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_03_21-09.36.29/05-CREATE_BED_FILE/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.camo.GATK.all_camo_regions.bed"
 
 /*
  * This is the *.camo_annotations.txt file that comes from the step
@@ -164,8 +173,9 @@ params.max_repeats_to_rescue = 5
 params.clean_tmp_files = false 
 
 /*
- * Defines the size of intervals to break the align_to_ref into for
- * running/parallelizing DRF.
+ * Defines the size of intervals to break the reference into for
+ * running/parallelizing DRF. This is for the reference that the input samples
+ * are currently aligned to.
  *
  * A DRF interval length of 10_000_000 will create nearly 500 jobs *per sample*
  * for the human genome (assuming small contigs are included). Small, unplaced
@@ -185,6 +195,7 @@ params.DRF_jar = file("${projectDir}/bin/DarkRegionFinder.jar")
 log.info """\
  RESCUE CAMO VARIANTS PIPELINE
  ==========================================
+ current reference                 : ${params.current_ref_fasta}
  unmasked reference                : ${params.unmasked_ref_fasta}
  masked reference                  : ${params.masked_ref_fasta}
  masked reference tag              : ${params.masked_ref_tag}
@@ -206,14 +217,15 @@ log.info """\
  * Import Modules
  */
 include {RUN_DRF_WF} from './modules/01-RUN_DRF.nf'
+include {CALCULATE_BAM_STATS_WF} from './modules/02-CALCULATE_BAM_STATS.nf'
 include {RESCUE_CAMO_VARS_WF} from './modules/03-RESCUE_CAMO_VARS_PROCS.nf'
 
 
 workflow{
 
-    RUN_DRF_WF( params.DRF_interval_length )
+    RUN_DRF_WF()
 
-    CALCULATE_BAM_STATS( RUN_DRF_WF.out )
+    CALCULATE_BAM_STATS_WF( RUN_DRF_WF.out )
 
     RESCUE_CAMO_VARS_WF()
 
