@@ -18,9 +18,6 @@ echo "Extraction bed: $extraction_bed"
 gatk_bed=$3
 echo "GATK bed: $gatk_bed"
 
-echo "###################################"
-echo "PATH: $PATH"
-echo "###################################"
 
 # A file with the list of bams to run
 bam_list=$4
@@ -52,11 +49,11 @@ sample_regex="SM:([A-Za-z0-9_\-]+)"
 threads=$7
 
 # Create GATK environment variable for convenience.
-GATK="gatk --java-options -Xmx20G --XX:+UseSerialGC -XX:ParallelGCThreads=${threads}"
+GATK="gatk --java-options -Xmx20G "
 
-# Track first and last sample to provide unique name to final output .gvcf. Cannot
-# use JobID because we don't know which scheduler (if any) will be used. Cannot use
-# seconds since Epoch because two jobs might finish at the same time.
+# Track first and last sample to provide unique name to final output .gvcf for this
+# batch. Cannot use JobID because we don't know which scheduler (if any) will be
+# used. Cannot use seconds since Epoch because two jobs might finish at the same time.
 index=0
 first_sample=""
 last_sample=""
@@ -175,6 +172,7 @@ do
 		# apparently remains the default: 
 		# https://gatk.broadinstitute.org/hc/en-us/community/posts/360077648352-GATK-4-2-0-0-Haplotype-caller-genotyping-mode-DISCOVERY-Option-
 		time $GATK HaplotypeCaller \
+			--native-pair-hmm-threads "${threads}" \
 			-R $ref \
 			-I $final_bam \
 			-L $gatk_bed \
@@ -218,7 +216,7 @@ do
 	# Index the gvcf so that it can be accessed 'randomly'
 	# by CombineGVCFs
 	time $GATK IndexFeatureFile \
-		-F $comb_gvcf_file
+		-I $comb_gvcf_file
 
 done
 

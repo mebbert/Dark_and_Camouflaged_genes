@@ -5,16 +5,24 @@ import groovy.io.FileType
  */
 nextflow.enable.dsl=2
 
-params.GVCF_DIRECTORY = './path/to/directories'
 
 workflow RESCUE_CAMO_VARS_WF {
 
     main:
 
         /*
+         * Recursively collect all .(cr|b)am files from the user-provided
+         * input_sample_path.
+         */
+        Channel.fromPath("${params.input_sample_path}/**.{bam,cram}",
+                    checkIfExists: true)
+            | set { input_files_ch }
+
+
+        /*
          * Prep batch files for RESCUE_CAMO_VARS_PROC
          */
-        PREP_BATCH_FILES_PROC()
+        PREP_BATCH_FILES_PROC( input_files_ch.collect() )
 
         /*
          * Rescue camo vars
@@ -31,7 +39,7 @@ workflow RESCUE_CAMO_VARS_WF {
         Channel.fromPath( params.gatk_bed )
             | splitCsv(sep: '\t')
             | map { line ->
-                println "Line: ${line}"
+                // println "Line: ${line}"
                 tuple( line[4].toInteger(), "${line[0]}:${line[1]}-${line[2]}" )
             }
             | set { regions }
@@ -68,6 +76,9 @@ process PREP_BATCH_FILES_PROC {
 
 	label 'local'
 
+    input:
+        path( input_files )
+
 	output:
 		path('bam_set_*', emit: bam_sets)
 
@@ -84,9 +95,9 @@ process PREP_BATCH_FILES_PROC {
     # to file. Then split file into sets of "${params.n_samples_per_batch}" so we can
     # process sets of "${params.n_samples_per_batch}" .bam files per job submission.
 
-	for bam in "${params.input_sample_path}/**/*.{bam,cram}"
+	for bam in *.{bam,cram}
 	do
-		echo \$bam
+		echo \$PWD/\$bam
 	done > bam_list.txt
 
     # Split bam_list.txt into sets of 50 bam files with prefix 'bam_set_'
@@ -215,7 +226,7 @@ process COMBINE_AND_GENOTYPE_PROC {
     input_gvcf_list="${ploidy_group}.gvcf.list"
 
     gatk \\
-        --java-options "${Xmx} ${Xms} -XX:+UseSerialGC -XX:ParallelGCThreads=${task.cpus}" \\
+        --java-options "${Xmx} ${Xms} -XX:+UseSerialGC" \\
         CombineGVCFs \\
         -R "${masked_ref_fasta}" \\
         -L "${region_string}" \\
@@ -223,13 +234,13 @@ process COMBINE_AND_GENOTYPE_PROC {
         -V "\${input_gvcf_list}"
 
     gatk \\
-        --java-options "${Xmx} ${Xms} -XX:+UseSerialGC -XX:ParallelGCThreads=${task.cpus}" \\
+        --java-options "${Xmx} ${Xms} -XX:+UseSerialGC" \\
         GenotypeGVCFs \\
         -R "${masked_ref_fasta}" \\
         -L "${region_string}" \\
         -A GenotypeSummaries \\
         -O "\${final_region_vcf}" \\
-        -V "${combined_region_gvcf}"
+        -V "\${combined_region_gvcf}"
     """
 }
 

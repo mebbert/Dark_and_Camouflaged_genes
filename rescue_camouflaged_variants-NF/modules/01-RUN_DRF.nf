@@ -17,10 +17,13 @@ workflow RUN_DRF_WF {
 
         /*
          * Create sample input channel
+         *
+         * Recursively collect all .(cr|b)am files (paired with respective index
+         * files) from the user-provided input_sample_path.
          */
-        Channel.fromFilePairs( "${params.input_sample_path}/**/*.{bam,cram}{,.bai,.crai}" )
-            | filter( ~/.*(\.sam|\.bam|\.cram)/ )
+        Channel.fromFilePairs( "${params.input_sample_path}/**.{bam,cram}{,.bai,.crai}" )
             | map { tuple( it.baseName, it ) }
+            | view()
             | set { sample_input_ch }
 
         /*

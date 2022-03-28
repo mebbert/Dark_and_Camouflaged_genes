@@ -52,7 +52,7 @@ params.extraction_bed = "${projectDir}/test_data/CR1-extraction-1KG_ref.bed"
  * not been masked for camouflaged regions, rescuing camouflaged variants will
  * not work.
  */
-params.masked_ref_fasta = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_03_10-18.31.18/06-MASK_GENOME/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.fa"
+params.masked_ref_fasta = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_03_21-10.52.02/06-MASK_GENOME/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.fa"
 
 
 /*
@@ -74,7 +74,9 @@ params.masked_ref_tag = '1KGenomes_GRCh38_full_analysis_set_plus_decoy_hla'
 
 /*
  * Path to input bams for rescuing camouflaged variants. Must be an absolute
- * path (not relative).
+ * path (not relative). This path should be to the parent folder for *all*
+ * .(cr|b)am files to be included in this rescue run. The workflow will 
+ * recursively find and include all .(cr|b)am files in the provided path.
  */
 params.input_sample_path = "${projectDir}/test_data/UKY_ADSP_test_crams"
 
@@ -100,14 +102,14 @@ params.sample_input_tag = "Test_samples"
  * must have coordinates specific to the reference genome being used in the
  * 'masked_ref_fasta' and the `unmasked_ref_fasta` arguments.
  */
-params.mask_bed = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_03_10-18.31.18/05-CREATE_BED_FILE/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.camo.align_to.sorted.bed"
+params.mask_bed = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_03_21-10.52.02/05-CREATE_BED_FILE/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.camo.mask_bed.sorted.bed"
 
 /*
  * Path to the .bed file that GATK will use to call variants. This MUST
  * contain coordinates based on the *MASKED* reference the samples *WILL BE*
  * aligned to in this pipeline. This can be the same reference *VERSION* the
  * samples were previously aligned to, but it must be masked. This .bed file
- * is similar to the 'align_to.bed' file used to mask the genome, except it is
+ * is similar to the 'mask_bed.bed' file used to mask the genome, except it is
  * restricted to the exact camouflaged regions rather than the expanded
  * camouflaged region needed for alignment (i.e., so reads can align to the
  * end of a camouflaged region).
@@ -122,13 +124,13 @@ params.mask_bed = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/res
  * TODO: Was previously only CDS. Currently adding support for all gene-body
  * elements, but we still ignore anything outside of gene bodies.
  */
-params.gatk_bed = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_03_21-09.36.29/05-CREATE_BED_FILE/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.camo.GATK.all_camo_regions.bed"
+params.gatk_bed = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_03_21-10.52.02/05-CREATE_BED_FILE/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.camo.GATK.all_camo_regions.bed"
 
 /*
  * This is the *.camo_annotations.txt file that comes from the step
  * 05-CREATE_BED_FILE in the workflow to define camouflaged regions.
  */
-params.camo_annotations = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_03_10-18.31.18/05-CREATE_BED_FILE/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.camo_annotations.txt"
+params.camo_annotations = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_03_21-10.52.02/05-CREATE_BED_FILE/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.camo_annotations.txt"
 
 /*
  * Define the number of samples to run in a single rescue batch. This can
@@ -227,7 +229,7 @@ workflow{
 
     CALCULATE_BAM_STATS_WF( RUN_DRF_WF.out )
 
-    RESCUE_CAMO_VARS_WF()
+    // RESCUE_CAMO_VARS_WF()
 
 }
 
