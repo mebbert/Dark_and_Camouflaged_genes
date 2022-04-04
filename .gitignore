@@ -3,4 +3,6 @@ work
 .nextflow*
 identify_dark_and_camouflaged_regions-NF/work
 rescue_camouflaged_variants-NF/work
+identify_dark_and_camouflaged_regions-NF/results
+rescue_camouflaged_variants-NF/results
 
