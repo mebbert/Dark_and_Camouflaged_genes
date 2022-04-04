@@ -227,7 +227,9 @@ workflow{
 
     RUN_DRF_WF()
 
-    CALCULATE_BAM_STATS_WF( RUN_DRF_WF.out )
+    //println RUN_DRF_WF.out
+    //CALCULATE_BAM_STATS_WF( RUN_DRF_WF.out )
+    //CALCULATE_BAM_STATS_WF( RUN_DRF_WF.out.combined_final_bed, RUN_DRF_WF.out.sample_DRF_output_file )
 
     // RESCUE_CAMO_VARS_WF()
 
