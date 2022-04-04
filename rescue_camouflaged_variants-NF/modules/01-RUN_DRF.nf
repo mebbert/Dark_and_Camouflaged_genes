@@ -20,9 +20,11 @@ workflow RUN_DRF_WF {
          *
          * Recursively collect all .(cr|b)am files (paired with respective index
          * files) from the user-provided input_sample_path.
+	 *
+	 * TODO: We need to make sure to check that the Crai is available for the cram. If not, we could kick off samtools index or tell the user to do it.
          */
-        Channel.fromFilePairs( "${params.input_sample_path}/**.{bam,cram}{,.bai,.crai}" )
-            | map { tuple( it.baseName, it ) }
+        Channel.fromFilePairs( "${params.input_sample_path}**.{bam,cram}{,.bai,.crai}", checkIfExists: true )
+            | map { tuple(file(it[1][0]).baseName, it[1][0], it[1][1]) }
             | view()
             | set { sample_input_ch }
 
@@ -31,6 +33,7 @@ workflow RUN_DRF_WF {
          */
         intervals = create_intervals( params.current_ref_fasta, params.DRF_interval_length )
 
+	//println intervals.size()
 //        intervals_file = file( "${params.current_ref_fasta_tag}.DRF_intervals.txt" )
 //        intervals_file.delete()
 //        intervals.each {
@@ -48,8 +51,6 @@ workflow RUN_DRF_WF {
          */
         samples_and_intervals = sample_input_ch
             .combine(intervals_ch)
-
-
         /*
          * Run DRF and combine sample DRF files
          */
@@ -72,9 +73,12 @@ workflow RUN_DRF_WF {
 process RUN_DRF_PROC {
 
 
+
     tag { "${sample_name}:${sample_input_file}" }
 	
 	label 'RUN_DRF_PROC'
+
+	time '1h'
 
 	input:
         tuple val(sample_name),
@@ -107,7 +111,7 @@ process COMBINE_SAMPLE_DRF_FILES_PROC {
 
     tag { "${sample_name}" }
 
-    publishDir("${params.results_dir}/02-RUN_DRF", mode: 'copy')
+    publishDir("${params.results_dir}/01-RUN_DRF", mode: 'copy')
 
     label 'local'
 
@@ -116,7 +120,7 @@ process COMBINE_SAMPLE_DRF_FILES_PROC {
         tuple val(sample_name), path(sample_low_mapq_beds)
 
     output:
-        path('*final.bed.gz')
+	path('*final.bed.gz')
 
     script:
 
