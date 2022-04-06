@@ -120,7 +120,13 @@ process COMBINE_SAMPLE_DRF_FILES_PROC {
         tuple val(sample_name), path(sample_low_mapq_beds)
 
     output:
-	path('*final.bed.gz')
+        tuple val(combined_output_file_name),
+         path('*final.bed.gz'), emit: combined_low_mapq_bed_ch
+
+//        Channel.fromPath(path('*final.bed.gz'))
+//            | map{file(it).baseName, it}
+//            | view() 
+//            | set{combined_low_mapq_bed_ch}, emit: combined_low_mapq_bed_ch
 
     script:
 

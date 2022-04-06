@@ -7,30 +7,26 @@ nextflow.enable.dsl=2
 workflow CALCULATE_BAM_STATS_WF {
 
     take:
-        //tuple val(combined_final_bed), path(sample_DRF_output_file)
-        //val(combined_final_bed)
-        //path(sample_DRF_output_file)
-	sample_DRF_output_file
+	sample_DRF_output_ch
 
     main:
         
-        sample_DRF_output_file.map { println 'test: $it'}
-//	println combined_output_file_name
-	println sample_DRF_output_file
+        sample_DRF_output_ch.map { println it[0] } 
+        sample_DRF_output_ch.map { println it[1] } 
+
+        sample_DRF_output_ch.map { tuple it[0], it[1]  } | view() | set{ sample_tuple } 
+        println sample_tuple
+
         //sample_DRF_output_file_test = file(sample_DRF_output_file)
 //	println sample_DRF_output_file.view()
-        //sample_DRF_output_file_ch = Channel.from( sample_DRF_output_file ).view()
-            //| map { tuple( file(it[0]).baseName, it[0] ) }
-	    //| view()
-	println "${params.sample_input_tag}"
-	sample_tuple = tuple( "${params.sample_input_tag}", sample_DRF_output_file)
+	//sample_tuple = tuple , sample_DRF_output_file.
 
 	//println sample_tuple
-        //GENERATE_LOW_MAPQ_AND_DEPTH_BEDS_PROC( sample_tuple )
-        //    | MERGE_DARK_REGIONS_PROC
-        //    | CALC_BAM_STATS_PROC
+        GENERATE_LOW_MAPQ_AND_DEPTH_BEDS_PROC( sample_tuple )
+            //| MERGE_DARK_REGIONS_PROC
+    //        | CALC_BAM_STATS_PROC
 
-   // emit:
+    //emit:
     //    MERGE_DARK_REGIONS_PROC.collect()
 }
 
@@ -56,8 +52,8 @@ process GENERATE_LOW_MAPQ_AND_DEPTH_BEDS_PROC {
      */
    
 
-    low_depth = sample_DRF_output_file.name.replaceFirst('.bed.gz', 'low_depth.bed.gz')
-    low_mapq = sample_DRF_output_file.name.replaceFirst('.bed.gz', 'low_mapq.bed.gz')
+    low_depth = sample_DRF_output_file.name.replaceFirst('.bed.gz', '.dark.low_depth.bed.gz')
+    low_mapq = sample_DRF_output_file.name.replaceFirst('.bed.gz', '.dark.low_mapq.bed.gz')
 
 
     """
@@ -90,12 +86,16 @@ process MERGE_DARK_REGIONS_PROC {
 
     script:
 
-    low_depth_merged_file = low_depth_file.contains("low_depth.bed.gz") ?
-                    dark_region_file.replaceFirst("low_depth.bed.gz", "low_depth-merged.bed") :
-                    dark_region_file.replaceFirst("low_mapq.bed.gz", "low_mapq-merged.bed")
-    low_mapq_merged_file = low_mapq_file.contains("low_mapq.bed.gz") ?
-                    dark_region_file.replaceFirst("low_depth.bed.gz", "low_depth-merged.bed") :
-                    dark_region_file.replaceFirst("low_mapq.bed.gz", "low_mapq-merged.bed")
+    println sample_name
+    low_depth_merged_file = sample_name.replaceFirst("low_depth.bed.gz", "low_depth-merged.bed")
+    low_mapq_merged_file = sample_name.replaceFirst("low_mapq.bed.gz", "low_mapq-merged.bed")
+
+    //low_depth_merged_file = low_depth_file.contains("low_depth.bed.gz") ?
+    //                dark_region_file.replaceFirst("low_depth.bed.gz", "low_depth-merged.bed") :
+    //                dark_region_file.replaceFirst("low_mapq.bed.gz", "low_mapq-merged.bed")
+    //low_mapq_merged_file = low_mapq_file.contains("low_mapq.bed.gz") ?
+    //                dark_region_file.replaceFirst("low_depth.bed.gz", "low_depth-merged.bed") :
+    //                dark_region_file.replaceFirst("low_mapq.bed.gz", "low_mapq-merged.bed")
 
     """
 
