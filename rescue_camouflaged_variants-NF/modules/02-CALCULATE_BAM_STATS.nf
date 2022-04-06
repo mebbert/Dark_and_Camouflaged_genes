@@ -23,7 +23,7 @@ workflow CALCULATE_BAM_STATS_WF {
 
 	//println sample_tuple
         GENERATE_LOW_MAPQ_AND_DEPTH_BEDS_PROC( sample_tuple )
-            //| MERGE_DARK_REGIONS_PROC
+            | MERGE_DARK_REGIONS_PROC
     //        | CALC_BAM_STATS_PROC
 
     //emit:
@@ -38,10 +38,10 @@ process GENERATE_LOW_MAPQ_AND_DEPTH_BEDS_PROC {
         tuple val(sample_name), val(sample_DRF_output_file)
 
     output:
-        tuple val(sample_name),
+        tuple val(low_depth),
                 path('*.dark.low_depth.bed.gz'),
                 emit: low_depth_out
-        tuple val(sample_name),
+        tuple val(low_mapq),
                 path('*.dark.low_mapq.bed.gz'),
                 emit: low_mapq_out
 
@@ -78,17 +78,21 @@ process MERGE_DARK_REGIONS_PROC {
          * The output file will either be <prefix>.low_depth-merged.bed or
          * prefix.low_mapq-merged.bed
          */
+        //tuple val(sample_name),
+        //        path('*.low_depth-merged.bed'),
+        //        path('*.low_mapq-merged.bed'),
+        //        path(dark_region_file),
+        //        emit: dark_region_files
         tuple val(sample_name),
                 path('*.low_depth-merged.bed'),
                 path('*.low_mapq-merged.bed'),
-                path(dark_region_file),
                 emit: dark_region_files
 
     script:
 
-    println sample_name
     low_depth_merged_file = sample_name.replaceFirst("low_depth.bed.gz", "low_depth-merged.bed")
     low_mapq_merged_file = sample_name.replaceFirst("low_mapq.bed.gz", "low_mapq-merged.bed")
+    
 
     //low_depth_merged_file = low_depth_file.contains("low_depth.bed.gz") ?
     //                dark_region_file.replaceFirst("low_depth.bed.gz", "low_depth-merged.bed") :
@@ -97,6 +101,8 @@ process MERGE_DARK_REGIONS_PROC {
     //                dark_region_file.replaceFirst("low_depth.bed.gz", "low_depth-merged.bed") :
     //                dark_region_file.replaceFirst("low_mapq.bed.gz", "low_mapq-merged.bed")
 
+                //echo "ERROR (`date`): Failed to merge coordinates for ${dark_region_file}. See log for details."
+		//echo "ERROR (`date`): Failed to merge coordinates for ${dark_region_file}. See log for details."
     """
 
     ##################################################################################
@@ -110,9 +116,10 @@ process MERGE_DARK_REGIONS_PROC {
         || if [[ \$? -eq 141 ]]; then  # Swallow 141 (SIGPIPE)
                 true
             else
-                echo "ERROR (`date`): Failed to merge coordinates for ${dark_region_file}. See log for details."
+                echo "ERROR (`date`): Failed to merge coordinates for ${low_depth_merged_file}. See log for details."
                 exit 1
             fi
+
 
     time bedtools merge -d 20 -c 5 -o mean,median -i ${low_mapq_merged_file} | \\
         remove_unassembled_contigs.py | \\
@@ -121,7 +128,7 @@ process MERGE_DARK_REGIONS_PROC {
         || if [[ \$? -eq 141 ]]; then  # Swallow 141 (SIGPIPE)
                 true
             else
-                echo "ERROR (`date`): Failed to merge coordinates for ${dark_region_file}. See log for details."
+                echo "ERROR (`date`): Failed to merge coordinates for ${low_mapq_merged_file}. See log for details."
                 exit 1
             fi
 
