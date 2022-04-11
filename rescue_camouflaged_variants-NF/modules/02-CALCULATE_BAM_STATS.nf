@@ -24,10 +24,10 @@ workflow CALCULATE_BAM_STATS_WF {
 	//println sample_tuple
         GENERATE_LOW_MAPQ_AND_DEPTH_BEDS_PROC( sample_tuple )
             | MERGE_DARK_REGIONS_PROC
-    //        | CALC_BAM_STATS_PROC
+            | CALC_BAM_STATS_PROC
 
-    //emit:
-    //    MERGE_DARK_REGIONS_PROC.collect()
+    emit:
+        MERGE_DARK_REGIONS_PROC.collect()
 }
 
 process GENERATE_LOW_MAPQ_AND_DEPTH_BEDS_PROC {
@@ -57,12 +57,16 @@ process GENERATE_LOW_MAPQ_AND_DEPTH_BEDS_PROC {
 
 
     """
-    combine_DRF_output.py "${sample_DRF_output_file}" "${low_depth}" "${low_mapq}"
+    bash combine_DRF.sh "${sample_DRF_output_file}" ${sample_name} $task.cpus
     """
+
+    //combine_DRF_output.py "${sample_DRF_output_file}" "${low_depth}" "${low_mapq}"
 }
 
 process MERGE_DARK_REGIONS_PROC {
     
+    publishDir("${params.results_dir}/02-CALCULATE_BAM_STATS", mode: 'copy')
+
     label 'MERGE_DARK_REGIONS'
 
     input:
@@ -86,12 +90,14 @@ process MERGE_DARK_REGIONS_PROC {
         tuple val(sample_name),
                 path('*.low_depth-merged.bed'),
                 path('*.low_mapq-merged.bed'),
+		path('*.all.dark.regions.bed'),
                 emit: dark_region_files
 
     script:
 
-    low_depth_merged_file = sample_name.replaceFirst("low_depth.bed.gz", "low_depth-merged.bed")
+    low_depth_merged_file = sample_name.replaceFirst("low_mapq.bed.gz", "low_depth-merged.bed")
     low_mapq_merged_file = sample_name.replaceFirst("low_mapq.bed.gz", "low_mapq-merged.bed")
+    dark_region_file = sample_name.replaceFirst("low_mapq.bed.gz", "all.dark.regions.bed")
     
 
     //low_depth_merged_file = low_depth_file.contains("low_depth.bed.gz") ?
@@ -109,34 +115,37 @@ process MERGE_DARK_REGIONS_PROC {
     # Merge coordinates for depth bed, removing regions that are less than 20bp long #
     ##################################################################################
     # Swallow 141 (SIGPIPE) because remove_unassembled_contigs.py closes pipe abruptly.
-    time bedtools merge -d 20 -c 5 -o mean,median -i ${low_depth_merged_file} | \\
+    time bedtools merge -d 20 -c 5 -o mean,median -i ${low_depth_file} | \\
         remove_unassembled_contigs.py | \\
         awk '{ if(\$3 - \$2 > 20) print \$0}' \\
         > ${low_depth_merged_file} \\
         || if [[ \$? -eq 141 ]]; then  # Swallow 141 (SIGPIPE)
                 true
             else
-                echo "ERROR (`date`): Failed to merge coordinates for ${low_depth_merged_file}. See log for details."
+                echo "ERROR (`date`): Failed to merge coordinates for ${low_depth_file}. See log for details."
                 exit 1
             fi
 
 
-    time bedtools merge -d 20 -c 5 -o mean,median -i ${low_mapq_merged_file} | \\
+    time bedtools merge -d 20 -c 5 -o mean,median -i ${low_mapq_file} | \\
         remove_unassembled_contigs.py | \\
         awk '{ if(\$3 - \$2 > 20) print \$0}' \\
         > ${low_mapq_merged_file} \\
         || if [[ \$? -eq 141 ]]; then  # Swallow 141 (SIGPIPE)
                 true
             else
-                echo "ERROR (`date`): Failed to merge coordinates for ${low_mapq_merged_file}. See log for details."
+                echo "ERROR (`date`): Failed to merge coordinates for ${low_mapq_file}. See log for details."
                 exit 1
             fi
-
+  
+    time cat ${low_depth_merged_file} ${low_mapq_merged_file} | sort -k1,1 -k2,2n > ${dark_region_file}
 
     """
 }
 
 process CALC_BAM_STATS_PROC {
+
+    publishDir("${params.results_dir}/02-CALCULATE_BAM_STATS/BamStats", mode: 'copy')
 
     label 'CALC_STATS'
 
@@ -147,7 +156,9 @@ process CALC_BAM_STATS_PROC {
                  path(full_dark_region_file)
 
     output:
-        path()
+        path("*low_depth_camo_regions.bed")
+        path("*bam_metrics.txt")
+
 
     script:
 
