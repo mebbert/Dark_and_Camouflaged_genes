@@ -227,6 +227,7 @@ workflow{
 
     RUN_DRF_WF()
 
+    //println RUN_DRF_WF.out
     CALCULATE_BAM_STATS_WF( RUN_DRF_WF.out )
 
     // RESCUE_CAMO_VARS_WF()

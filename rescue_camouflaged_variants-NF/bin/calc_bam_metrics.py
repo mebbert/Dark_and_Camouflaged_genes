@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 
 import pandas as pd
 import numpy as np
@@ -47,11 +48,13 @@ n_low_mapq_regions = len(low_mapq_regions.index)
 low_mapq_regions['region size'] = low_mapq_regions['end'] - low_mapq_regions['start']
 cum_low_mapq_region_size = low_mapq_regions['region size'].sum()
 
+print("mean_depth\tstdev_depth\tmedian_depth\tn_low_depth_regions\tcum_low_depth_region_size\tn_low_mapq_regions\tcum_low_mapq_region_size")
+
 print("%f\t%f\t%f\t%f\t%f\t%f\t%f" %
         (
-            mean,
+            mean_depth,
             stdev_depth,
-            median,
+            median_depth,
             n_low_depth_regions,
             cum_low_depth_region_size,
             n_low_mapq_regions,
