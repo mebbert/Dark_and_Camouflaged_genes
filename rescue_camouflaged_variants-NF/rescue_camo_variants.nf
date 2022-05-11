@@ -229,7 +229,6 @@ workflow{
 
     //println RUN_DRF_WF.out
     CALCULATE_BAM_STATS_WF( RUN_DRF_WF.out )
-    //`CALCULATE_BAM_STATS_WF( RUN_DRF_WF.out.collect().low_mapq_bed, RUN_DRF_WF.out.collect().low_mapq_bed_file_name )
 
     // RESCUE_CAMO_VARS_WF()
 
