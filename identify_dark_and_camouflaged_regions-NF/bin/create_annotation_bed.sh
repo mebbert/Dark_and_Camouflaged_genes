@@ -8,7 +8,7 @@ set -x
 # removed (transcripts are collapsed down and overlapping genes and antisense genes removed)
 
 GFF3=$1
-TMP="annotation/"
+TMP="intermediate_annotation_files/"
 
 mkdir -p $TMP
 
@@ -20,15 +20,26 @@ then
 	exit 1
 fi
 
-# Create a filtered GFF file that contains only a single gene entry for any given gene.
+# Create a filtered GFF file that contains only a single gene entry (and associated transcripts,
+# etc.) for any given gene.
+#
 # Essentially, because the GFF file contains gene definitions from multiple consortia
 # (e.g., havana, ensembl), there are multiple and differing gene definitions in the file.
 # We chose to select the largest of the gene definitions for any given gene (based on start
-# and end. This will also include all transcripts from that gene definition.
-FILTERED_GFF3="${TMP}/${base//.gff3/.filtered.gff3}"
-
+# and end). This will also include all transcripts from that gene definition.
+#
+# Steps are as follows:
+#   1. The awk command keeps only lines with "ID=gene:"
+#   2. Bedtools collects those that overlap
+#   3. filter_gff3.py chooses which of the duplicates to keep (if any) and then
+#      extracts all elements from that gene entry from the original gff file (i.e.,
+#      NOT from the awk output).
+#   4. Sorts the results and prints to the out file.
+#
 # TODO: Keep an eye on whether the added sort causes problems for reference genomes
 # where chromosomes are sorted numerically rather than ascii-betically. 
+
+FILTERED_GFF3="${TMP}/${base//.gff3/.filtered.gff3}"
 awk '$9 ~ "^ID=gene:"' $GFF3 | \
 	bedtools cluster -s | \
 	filter_gff3.py $GFF3 | \
@@ -52,7 +63,7 @@ awk '$3 == "CDS"' $FILTERED_GFF3 | \
 		}
 
 # Isolate just the UTRs from the filtered GFF. In this case, however, we also
-# subtract the CDS regions from the UTRs. i.e., because the CDS region is
+# subtract the CDS regions from the UTRs. i.e., if the CDS region is
 # considered CDS in at least one transcript, we will always treat it as CDS
 # and NOT a UTR.
 UTRs="${TMP}/${base//.gff3/.utrs.bed}"
