@@ -23,6 +23,7 @@ workflow RESCUE_CAMO_VARS_WF {
          * Prep batch files for RESCUE_CAMO_VARS_PROC
          */
         PREP_BATCH_FILES_PROC( input_files_ch.collect() )
+//        PREP_BATCH_FILES_PROC( "${params.input_sample_path}" )
 
         /*
          * Rescue camo vars
@@ -44,6 +45,7 @@ workflow RESCUE_CAMO_VARS_WF {
             }
             | set { regions }
 
+        
         RESCUE_CAMO_VARS_PROC.out.camo_gvcfs.flatten()
              .map { tuple( it.subpath(it.getNameCount() - 2, it.getNameCount() - 1).name, it )
              }
@@ -54,16 +56,50 @@ workflow RESCUE_CAMO_VARS_WF {
                  def masked_ref_fasta = file( params.masked_ref_fasta )
                  tuple( repeat, dirname, masked_ref_fasta, gvcf_files )
              }
+             //.view()
              .combine( regions, by: 0 )
              .map { repeat, dirname, masked_ref_fasta, gvcf_files, region ->
                  tuple( dirname, region, masked_ref_fasta, gvcf_files )
-             } | COMBINE_AND_GENOTYPE_PROC
+             }| COMBINE_AND_GENOTYPE_PROC
 
+    emit:
+        COMBINE_AND_GENOTYPE_PROC.out.combined_gvcfs.unique().groupTuple(sort:{ a,b -> 
+            file_name_pattern = ~/full_cohort\.combined\.chr([\dXY]*)_(\d*)-(\d*)\.ploidy_(\d*)\.g\.vcf/
+            def (_A, chrA, startA, endA, ploidyA) = (a =~ file_name_pattern)[0]
+            def (_B, chrB, startB, endB, ploidyB) = (b =~ file_name_pattern)[0]
+            chrA = chrA?.isInteger() ? chrA as Integer : chrA
+            chrB = chrB?.isInteger() ? chrB as Integer : chrB
+            startA = startA?.isInteger() ? startA as Integer : startA
+            startB = startB?.isInteger() ? startB as Integer : startB
+            endA = endA?.isInteger() ? endA as Integer : endA
+            endB = endB?.isInteger() ? endB as Integer : endB
 
-        /*
-         * Identify false positives (i.e., reference-based artifiacts).
-         */
-        IDENTIFY_FALSE_POSITIVES_PROC()
+            if (chrA instanceof String && chrB instanceof String && chrA < chrB) {
+                return -1;
+            } else if (chrA instanceof String && chrB instanceof String && chrA > chrB) {
+                return 1;
+            } else if (chrA instanceof Integer && chrB instanceof Integer && chrA < chrB) {
+                return -1;
+            } else if (chrA instanceof Integer && chrB instanceof Integer && chrA > chrB) {
+                return 1;
+            } else if (chrA instanceof Integer && chrB instanceof String) {
+                return -1;
+            } else if (chrA instanceof String && chrB instanceof Integer) {
+                return 1;
+            } else if (startA < startB) {
+                return -1;
+            } else if (startA > startB) {
+                return 1;
+            } else if (endA < endB) {
+                return -1;
+            } else if (endA > endB) {
+                return 1;
+            } else {
+                return 1;
+            }
+
+        })
+
 }
 
 
@@ -95,7 +131,7 @@ process PREP_BATCH_FILES_PROC {
     # to file. Then split file into sets of "${params.n_samples_per_batch}" so we can
     # process sets of "${params.n_samples_per_batch}" .bam files per job submission.
 
-	for bam in *.{bam,cram}
+	for bam in *.{cram,bam}
 	do
 		echo \$PWD/\$bam
 	done > bam_list.txt
@@ -196,7 +232,9 @@ process COMBINE_AND_GENOTYPE_PROC {
 
 
     output:
-        tuple val(ploidy_group), val(region_string), path("full_cohort.combined.${region}.g.vcf")
+        tuple val(ploidy_group), path("full_cohort.combined.${region}.${ploidy_group}.g.vcf"), emit: combined_gvcfs
+        tuple val(ploidy_group), path("full_cohort.combined.${region}.${ploidy_group}.vcf"), emit: combined_vcfs
+        //tuple val(ploidy_group), val(region_string), path("full_cohort.combined.${region}.g.vcf")
 
     script:
 
@@ -221,8 +259,8 @@ process COMBINE_AND_GENOTYPE_PROC {
     ${gvcf_files.join('\n'+' '*4)}
     __EOF__
 
-    combined_region_gvcf="full_cohort.combined.${region}.g.vcf"
-    final_region_vcf="full_cohort.combined.${region}.vcf"
+    combined_region_gvcf="full_cohort.combined.${region}.${ploidy_group}.g.vcf"
+    final_region_vcf="full_cohort.combined.${region}.${ploidy_group}.vcf"
     input_gvcf_list="${ploidy_group}.gvcf.list"
 
     gatk \\
@@ -244,43 +282,3 @@ process COMBINE_AND_GENOTYPE_PROC {
     """
 }
 
-
-/*
- * The process to identify false-positive variant calls in the rescued camo
- * variants. These false-positives specifically originate from what we term
- * "reference-based artifacts". These artifacts show up when when two regions
- * in a given camo set are not 100% identical. Thus, when a read from one
- * region is forced to align to the other, a false variant is called.
- *
- * This process creates a list of all possible reference-based artifacts by
- * taking all camo CDS regions with repeat number ≤ 5 (i.e., ≤ 5 camo regions
- * in the set) and BLAT them against the whole genome. Any DNA sequence from a
- * hit with sequence identity ≥ 98% are locally realigned back to the query
- * seqeunce using Bio.pairwise2. Any mismatches or gaps in the aligned sequence
- * are converted into variant positions and output to a bed file that lists
- * positions of reference-based-artifacts to be filtered from the VCF files.
- *
- * NOTE: This only needs to be run once per reference genome.
- */
-process IDENTIFY_FALSE_POSITIVES_PROC {
-
-    publishDir("${params.results_dir}/03-IDENTIFY_FALSE_POSITIVES", mode: 'copy')
-
-	label 'IDENTIFY_FALSE_POSITIVES'
-
-    output:
-        path "reference_based_artifacts.${params.masked_ref_tag}.bed"
-
-    script:
-    """
-    artifacts_bed="reference_based_artifacts.${params.masked_ref_tag}.bed"
-
-    bash identify_false_positives.sh \\
-        "${params.camo_annotations}" \\
-        "${params.rescue_gene_elements}" \\
-        "${params.mask_bed}" \\
-        "${params.unmasked_ref_fasta}" \\
-        "\${artifacts_bed}" \\
-        "${task.cpus}"
-    """
-}
