@@ -112,7 +112,8 @@ echo "`date` blatting complete: combining blat output"
 cat ${blat_result}.* > $blat_result
 
 echo "`date` scoring blat output"
-if ! awk -f score_blat_output.awk \
+# filter all sequences with sequence identity >= 98%
+if ! score_blat_output.awk \
 	$blat_result \
 	> $blat_bed; then
 	echo "`date` score_blat_output.awk failed for $blat_result."
@@ -120,7 +121,8 @@ if ! awk -f score_blat_output.awk \
 fi
 
 echo "`date` extracting false positives"
-if ! python extract_false_positives.py \
+# create a bed file of positions of the reference base artifacts that need to be filtered from the VCF files
+if ! extract_false_positives.py \
 	$blat_bed \
 	$REF | \
 	bedtools sort -i - -g ${REF}.fai \

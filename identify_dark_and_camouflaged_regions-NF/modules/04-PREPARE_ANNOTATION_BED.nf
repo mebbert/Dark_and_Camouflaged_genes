@@ -12,7 +12,8 @@ process PREPARE_ANNOTATION_BED_PROC {
 		path(annotation_bed) //path to gene annotation gff3
 
 	output:
-		path '*annotation.bed', emit: prepped_anno_bed
+		path '*.annotation.bed', emit: prepped_anno_bed
+		path 'intermediate_annotation_files', emit: intermediate_files
 
 	script:
 		"""

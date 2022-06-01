@@ -444,7 +444,7 @@ bedtools intersect \
 
 ## From the scored intersected blat output, calculates the maps
 ## of which camo regions align to which other ones, and creates camo sets
-# lists all the regions in a camo set in the extraction file and selects the one region form that set that we 
+## lists all the regions in a camo set in the extraction file and selects the one region from that set that we 
 ## will use to align to (written in the mask_bed file, all other regions in set will be masked)
 if ! extract_camo_regions.py \
 	$mapq_annotations \
@@ -489,6 +489,15 @@ fi
 ####################################################################################
 ## Create Camo Annotation table (intersecting camo regions to gene annotation bed) #
 ####################################################################################
+#
+# Intersecting with the $ANNOTATION file results in some "duplicates" in the file because of
+# overlapping gene *bodies* (e.g., pseudogenes and lncRNAs) on opposite strands. We want to keep
+# these "duplicate" regions for completeness, but it presents downstream challenges that have to be
+# handled appropriately (e.g., avoiding duplicate variant calls when running GATK).
+#
+# To be specific, this intersect results in overlapping *coordinates* being reported twice, but with
+# different annotations (one set from the + strand for gene body X and one set from the - strand for
+# gene body Y)
 bedtools intersect \
 	-a $ANNOTATION \
 	-b $camo_sorted \
@@ -510,6 +519,9 @@ bedtools intersect \
 ## Create GATK bed: bed that will give regions were camo variants will be called
 ## The GATK bed is the CDS mask_bed regions that are exclusively camo,
 ## The normal mask_bed lists the whole genebody element, GATK restricts to just those camo regions
+#
+# TODO (Maddy): Verify that we don't run into the issue below when running the CDS-only GATK bed
+# file
 grep -vE "^#" $camo_annotations | \
 	awk '$5 == "CDS"' | \
 	bedtools intersect \
@@ -522,9 +534,17 @@ grep -vE "^#" $camo_annotations | \
 		}
 
 
-## Create GATK bed for all camo regions: bed that will give regions were camo variants will be called
-## The GATK bed is for all mask_bed camo regions (not just CDS) that are exclusively camo,
-## The normal mask_bed lists the whole genebody element, GATK restricts to just those camo regions
+# Create GATK bed for all camo regions: bed that will give regions were camo variants will be called
+# The GATK bed is for all mask_bed camo regions (not just CDS) that are exclusively camo,
+# The normal mask_bed lists the whole genebody element, GATK restricts to just those camo regions
+#
+# The $camo_annotation file has multiple entries for some genome coordinates because of overlapping
+# gene bodies on opposite strands (see above for more details). As a result, this intersect results
+# in duplicate entries that are almost identical that need to be merged.
+#
+# TODO (Maddy): Incorporate a bedtools merge command *after* the intersect.
+# TODO (Maddy): Write a script to verify that the camo sets for merged coordinates are *identical*
+#               to ensure we aren't missing another edge case.
 grep -vE "^#" $camo_annotations | \
 	bedtools intersect \
 		-a $alignto_sorted \

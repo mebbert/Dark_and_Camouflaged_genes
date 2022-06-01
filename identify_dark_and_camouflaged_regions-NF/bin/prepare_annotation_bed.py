@@ -33,9 +33,9 @@ def main():
     UTR_count = defaultdict(int)
     gene_beginning = False
     for line in sys.stdin:
-      #  print(line)
+
+        # Collect meta data
         toks = line.strip().split('\t')
-#        print(toks)
         chrom = toks[0]
         gene_start = int(toks[1])
         gene_end = int(toks[2])
@@ -44,7 +44,7 @@ def main():
         gene_strand = toks[5]
         annos = extractAnnos(toks[6])
 
-        # annos["ID"] will return either "ID=<ENSG_ID>" or "ID=gene:<ENSG_ID>". Strip
+        # We expect annos["ID"] to return either "ID=<ENSG_ID>" or "ID=gene:<ENSG_ID>". Strip
         # "gene:" if it exists.
         gene_ID = annos["ID"]
         if gene_ID.startswith('gene:'):
@@ -52,7 +52,7 @@ def main():
 
         biotype = annos["biotype"]
 
-        # Somewhere between GRCh38 release 93 and 105, Ensembl dropped 'Name' annotations for come
+        # Somewhere between GRCh38 release 93 and 105, Ensembl dropped 'Name' annotations for some
         # genes. Not sure why. If the 'Name' annotation is missing, just set it to the gene ID.
         try:
             gene_name = annos["Name"]
@@ -63,6 +63,7 @@ def main():
            # print('toks 7 is a dot')
             continue
 
+        # Entering a new gene definition block in the gff file
         if current_gene != gene_ID:
             #print('current_gene != gene_ID')
             printLine(previous_region)
@@ -73,6 +74,7 @@ def main():
             previous_region = None
             gene_beginning = True
 
+        # Collect region information
         region_start = int(toks[8])
         region_start = max(gene_start, region_start)
         region_end = int(toks[9])
@@ -87,15 +89,17 @@ def main():
         region_strand = toks[12]
         region_ID = ""
         region_Name = ""
+
+        # Handle UTR regions
         if "UTR" in region_type:
             #print('utr in region_type')
             UTR_count[gene_ID] += 1
-            region_ID = gene_ID[4:] + "_UTR_%d" % UTR_count[gene_ID]
+            region_ID = gene_ID + "_UTR_%d" % UTR_count[gene_ID]
             region_Name = gene_name + "_UTR_%d" % UTR_count[gene_ID]
         else:
             #print('utr NOT in region_type')
             exon_count[gene_ID] += 1
-            region_ID = gene_ID[4:] + "_exon_%d" % exon_count[gene_ID]
+            region_ID = gene_ID + "_exon_%d" % exon_count[gene_ID]
             region_Name = gene_name + "_exon_%d" % exon_count[gene_ID]
 
         region = (chrom, region_start, region_end, region_type, region_score, region_strand, region_ID, region_Name, biotype)
@@ -111,12 +115,12 @@ def main():
             #print("printing previous region")
             printLine(previous_region)
 
-            #check to see if there is gaps between exons (if there is fill with intron)
+            #check to see if there are gaps between exons (if there are fill with intron)
             if region[1] - previous_region[2] - 1 > 0:
                 intron_start = previous_region[2] + 1
                 intron_end = region[1] - 1
                 intron_count[gene_ID] += 1
-                intron_ID = gene_ID[4:] + "_intron_%d" % intron_count[gene_ID]
+                intron_ID = gene_ID + "_intron_%d" % intron_count[gene_ID]
                 intron_Name = gene_name + "_intron_%d" % intron_count[gene_ID]
                 intron = (chrom, intron_start, intron_end, "intron", region_score, region_strand, intron_ID, intron_Name, biotype)
                # print("printing intron")
