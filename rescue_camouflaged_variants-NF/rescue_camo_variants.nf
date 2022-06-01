@@ -175,6 +175,12 @@ params.max_repeats_to_rescue = 5
 params.clean_tmp_files = false 
 
 /*
+ * This is a bed file of the genes of interest to you. 
+ * It's formatted chr\tstart of CDS regions\tend of CDS region\tGene Name 
+ */
+params.genes_of_interest = "genesOfInterest.bed"
+
+/*
  * Defines the size of intervals to break the reference into for
  * running/parallelizing DRF. This is for the reference that the input samples
  * are currently aligned to.
@@ -190,6 +196,11 @@ params.DRF_interval_length = 5_000_000
  * Specify where the DRF jar file can be found
  */
 params.DRF_jar = file("${projectDir}/bin/DarkRegionFinder.jar")
+
+/*
+ * Specify where the Report Rmarkdown file is located
+ */
+params.Report_Rmd = file("${projectDir}/bin/SampleGenomeStats.Rmd")
 
 
 
@@ -212,6 +223,8 @@ log.info """\
  max repeats to rescue             : ${params.max_repeats_to_rescue}
  clean tmp files?                  : ${params.clean_tmp_files}
  DRF_interval_length               : ${params.DRF_interval_length}
+ Genes_of_interest                 : ${params.genes_of_interest}
+ Report_Rmd_Path                   : ${params.Report_Rmd}
  DRF_jar                           : ${params.DRF_jar}
  """
 
@@ -221,16 +234,23 @@ log.info """\
 include {RUN_DRF_WF} from './modules/01-RUN_DRF.nf'
 include {CALCULATE_BAM_STATS_WF} from './modules/02-CALCULATE_BAM_STATS.nf'
 include {RESCUE_CAMO_VARS_WF} from './modules/03-RESCUE_CAMO_VARS_PROCS.nf'
+include {GENERATE_REPORTS_WF} from './modules/04-GENERATE_REPORTS.nf'
 
 
 workflow{
 
     RUN_DRF_WF()
 
-    //println RUN_DRF_WF.out
-    CALCULATE_BAM_STATS_WF( RUN_DRF_WF.out )
+    println RUN_DRF_WF.out
+    CALCULATE_BAM_STATS_WF( RUN_DRF_WF.out ) 
+
+    println CALCULATE_BAM_STATS_WF.out
+
+    GENERATE_REPORTS_WF( CALCULATE_BAM_STATS_WF.out  )
+
 
     // RESCUE_CAMO_VARS_WF()
+
 
 }
 

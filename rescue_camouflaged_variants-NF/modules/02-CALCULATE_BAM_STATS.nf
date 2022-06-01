@@ -24,13 +24,16 @@ workflow CALCULATE_BAM_STATS_WF {
 	//println sample_tuple
         GENERATE_LOW_MAPQ_AND_DEPTH_BEDS_PROC( sample_tuple )
             | MERGE_DARK_REGIONS_PROC
-            | CALC_BAM_STATS_PROC
+           // | CALC_BAM_STATS_PROC
+	
 
     emit:
-        MERGE_DARK_REGIONS_PROC.collect()
+        MERGE_DARK_REGIONS_PROC.out
 }
 
 process GENERATE_LOW_MAPQ_AND_DEPTH_BEDS_PROC {
+
+    publishDir("${params.results_dir}/02-CALCULATE_BAM_STATS", mode: 'copy')
 
     label 'GENERATE_LOW_MAPQ_AND_DEPTH_BEDS'
 
@@ -90,7 +93,9 @@ process MERGE_DARK_REGIONS_PROC {
         tuple val(sample_name),
                 path('*.low_depth-merged.bed'),
                 path('*.low_mapq-merged.bed'),
+		path('*_perRegionMetrics.bed'),
 		path('*.all.dark.regions.bed'),
+		path('*_extractionCoverage.bed.gz'),
                 emit: dark_region_files
 
     script:
@@ -110,6 +115,31 @@ process MERGE_DARK_REGIONS_PROC {
                 //echo "ERROR (`date`): Failed to merge coordinates for ${dark_region_file}. See log for details."
 		//echo "ERROR (`date`): Failed to merge coordinates for ${dark_region_file}. See log for details."
     """
+
+    pigz -c -d ${low_mapq_file} | \\
+        awk 'NR>1{print \$0}' | remove_unassembled_contigs.py | \\
+        bedtools intersect -sorted -wao -a "${params.extraction_bed}" -b - | \\
+        pigz -c - > ${sample_name}.low_mapq_extractionCoverage.bed.gz
+
+    pigz -c -d ${low_depth_file} | \\
+        awk 'NR>1{print \$0}' | remove_unassembled_contigs.py | \\
+        bedtools intersect -sorted -wao -a "${params.extraction_bed}" -b - | \\
+        pigz -c - > ${sample_name}.low_depth_extractionCoverage.bed.gz
+
+
+    pigz -c -d ${low_depth_file} | \\
+        awk 'NR>1{print \$0}' | \\
+        remove_unassembled_contigs.py | \\
+        bedtools intersect -sorted -a "${params.extraction_bed}" -b - -loj | \\
+        bedtools merge -i - -o distinct,mean,median,stdev -c 4,10,10,10 > ${sample_name}_low_depth_perRegionMetrics.bed
+
+
+    pigz -c -d ${low_mapq_file} | \\
+        awk 'NR>1{print \$0}' | \\
+        remove_unassembled_contigs.py | \\
+        bedtools intersect -sorted -a ${params.extraction_bed} -b - -loj | \\
+        bedtools merge -i - -o distinct,mean,median,stdev -c 4,10,10,10 > ${sample_name}_low_mapq_perRegionMetrics.bed
+
 
     ##################################################################################
     # Merge coordinates for depth bed, removing regions that are less than 20bp long #
@@ -143,6 +173,7 @@ process MERGE_DARK_REGIONS_PROC {
     """
 }
 
+
 process CALC_BAM_STATS_PROC {
 
     publishDir("${params.results_dir}/02-CALCULATE_BAM_STATS/BamStats", mode: 'copy')
@@ -153,10 +184,13 @@ process CALC_BAM_STATS_PROC {
         tuple val(sample_name),
                  path(merged_low_depth_regions_file),
                  path(merged_low_mapq_regions_file),
+                 path(per_region_metric_file),
                  path(full_dark_region_file)
+			
 
     output:
         path("*low_depth_camo_regions.bed")
+        path("*low_mapq_camo_regions.bed")
         path("*bam_metrics.txt")
 
 
@@ -172,11 +206,20 @@ process CALC_BAM_STATS_PROC {
     # rescued for this specific sample (i.e., could be degraded DNA, or intronic
     # region from an exome, etc.).
 
+
     bedtools intersect \\
         -a "${params.extraction_bed}" \\
         -b "${merged_low_depth_regions_file}" \\
         -loj > "${sample_name}.low_depth_camo_regions.bed"
 
+    bedtools intersect \\
+        -a "${params.extraction_bed}" \\
+        -b "${merged_low_mapq_regions_file}" \\
+        -loj > "${sample_name}.low_mapq_camo_regions.bed"
+
+    awk -F"\t" 'BEGIN{OFS="\t"}\$6!="."{a[\$1"\t"\$2"\t"\$3"\t"\$4"\t"\$6"\t"\$7"\t"\$8] += \$9; b[\$1"\t"\$2"\t"\$3"\t"\$4"\t"\$6"\t"\$7"\t"\$8] +=1}END{for(x in a){print x,a[x]/b[x]}}' "${sample_name}".low_mapq_camo_regions.bed > "${sample_name}".low_mapq_camo_regions.meanDepth.bed
+
+    awk -F"\t" 'BEGIN{OFS="\t"}\$6!="."{a[\$1"\t"\$2"\t"\$3"\t"\$4"\t"\$6"\t"\$7"\t"\$8] += \$9; b[\$1"\t"\$2"\t"\$3"\t"\$4"\t"\$6"\t"\$7"\t"\$8] +=1}END{for(x in a){print x,a[x]/b[x]}}' "${sample_name}".low_depth_camo_regions.bed > "${sample_name}".low_depth_camo_regions.meanDepth.bed
 
     calc_bam_metrics.py \\
         "${full_dark_region_file}" \\
@@ -184,6 +227,9 @@ process CALC_BAM_STATS_PROC {
         "${merged_low_mapq_regions_file}" \\
         > "${sample_name}.bam_metrics.txt"
 
-    
     """
 }
+
+
+
+

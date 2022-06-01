@@ -11,9 +11,9 @@ colnames = ['chrom', 'start', 'end', 'MapQBelowThreshold', 'depth', 'percMapQBel
 all_dark_regions = pd.read_csv(sys.argv[1], names=colnames, delimiter="\t", dtype={"chrom":str})
 
 # get mean, std, and median depth across the entire genome
-mean_depth = all_dark_regions["depth"].mean()
-stdev_depth = all_dark_regions["depth"].std()
-median_depth = all_dark_regions["depth"].median()
+all_mean_depth = all_dark_regions["depth"].mean()
+all_stdev_depth = all_dark_regions["depth"].std()
+all_median_depth = all_dark_regions["depth"].median()
 
 
 
@@ -36,6 +36,10 @@ low_depth_regions['region size'] = low_depth_regions['end'] - low_depth_regions[
 cum_low_depth_region_size = low_depth_regions['region size'].sum()
 
 
+low_depth_mean_depth = low_depth_regions["mean depth"].mean()
+low_depth_stdev_depth = low_depth_regions["mean depth"].std()
+low_depth_median_depth = low_depth_regions["mean depth"].median()
+
 
 ################################
 # Merged low-mapq regions file #
@@ -48,15 +52,31 @@ n_low_mapq_regions = len(low_mapq_regions.index)
 low_mapq_regions['region size'] = low_mapq_regions['end'] - low_mapq_regions['start']
 cum_low_mapq_region_size = low_mapq_regions['region size'].sum()
 
-print("mean_depth\tstdev_depth\tmedian_depth\tn_low_depth_regions\tcum_low_depth_region_size\tn_low_mapq_regions\tcum_low_mapq_region_size")
+low_mapq_mean_depth = low_mapq_regions["mean depth"].mean()
+low_mapq_stdev_depth = low_mapq_regions["mean depth"].std()
+low_mapq_median_depth = low_mapq_regions["mean depth"].median()
 
-print("%f\t%f\t%f\t%f\t%f\t%f\t%f" %
+
+
+###############################
+# Write stats to file         #
+###############################
+
+print("all_mean_depth\tall_stdev_depth\tall_median_depth\tn_low_depth_regions\tcum_low_depth_region_size\tlow_depth_mean_depth\tlow_depth_stdev_depth\tlow_depth_median_depth\tn_low_mapq_regions\tcum_low_mapq_region_size\tlow_mapq_mean_depth\tlow_mapq_stdev_depth\tlow_mapq_median_depth")
+
+print("%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f" %
         (
-            mean_depth,
-            stdev_depth,
-            median_depth,
+            all_mean_depth,
+            all_stdev_depth,
+            all_median_depth,
             n_low_depth_regions,
             cum_low_depth_region_size,
+            low_depth_mean_depth,
+            low_depth_stdev_depth,
+            low_depth_median_depth,
             n_low_mapq_regions,
             cum_low_mapq_region_size,
+            low_mapq_mean_depth,
+            low_mapq_stdev_depth,
+            low_mapq_median_depth,
     ))

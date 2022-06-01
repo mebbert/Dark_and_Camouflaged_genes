@@ -20,8 +20,11 @@ workflow RUN_DRF_WF {
          *
          * Recursively collect all .(cr|b)am files (paired with respective index
          * files) from the user-provided input_sample_path.
+         *
+	 * This should create a tuple of samplename to path for each file passed to this workflow
 	 *
 	 * TODO: We need to make sure to check that the Crai is available for the cram. If not, we could kick off samtools index or tell the user to do it.
+	 * TODO: We will also need to add in some logic to make sure that there is a "/" at the end of the input_sample_path. otherwise it seemingly pulls files at random. 
          */
         Channel.fromFilePairs( "${params.input_sample_path}**.{bam,cram}{,.bai,.crai}", checkIfExists: true )
             | map { tuple(file(it[1][0]).baseName, it[1][0], it[1][1]) }
@@ -57,7 +60,9 @@ workflow RUN_DRF_WF {
         RUN_DRF_PROC( samples_and_intervals )
             | groupTuple(size: intervals.size())
             | COMBINE_SAMPLE_DRF_FILES_PROC
+            | CALC_GLOBAL_STATS_PROC
 
+	CALC_GENES_OF_INTEREST_PROC( sample_input_ch )
 
     emit:
         COMBINE_SAMPLE_DRF_FILES_PROC.out
@@ -146,6 +151,61 @@ process COMBINE_SAMPLE_DRF_FILES_PROC {
     """
 }
 
+process CALC_GLOBAL_STATS_PROC {
+
+    tag { "${sample_name}" }
+
+    publishDir("${params.results_dir}/01-RUN_DRF", mode: 'copy')
+
+    label 'GLOBAL_STATS_PROC'
+
+    input:
+        tuple val(combined_output_file_name),
+         path(final_bed)
+
+    output:
+       tuple val(combined_output_file_name),
+        path('*.GlobalStats.txt'), emit: global_stats
+
+    script:
+
+    combined_output_file_name = combined_output_file_name.replaceFirst("\\.bed.gz", ".GlobalStats.txt")
+
+    """
+
+    bedtools merge -sorted -i ${final_bed} -c 5 -o sum > temp.txt
+    calc_perBaseStats.py temp.txt ${combined_output_file_name}
+    rm temp.txt
+
+    """
+}
+
+process CALC_GENES_OF_INTEREST_PROC {
+
+        tag { "${sample[0]}" }
+
+        publishDir("${params.results_dir}/01-RUN_DRF", mode: 'copy')
+	
+	label 'CALC_GENES_OF_INTEREST_PROC'
+
+
+	input:
+	 	val(sample)
+
+	output:
+		tuple val(sample),
+                 path("*_cov.perBase.GOI.bed"),
+                 emit: GOI_Coverage
+
+	script:
+	"""
+ 	samtools view -L "${params.genes_of_interest}" -O bam -o "${sample[0]}_ROI.bam" "${sample[1]}"
+ 	bedtools genomecov -bg -ibam "${sample[0]}_ROI.bam" | \\
+ 	bedtools intersect -wao -sorted -a - -b "${params.genes_of_interest}" > "${sample[0]}_cov.perBase.GOI.bed"
+	
+
+	"""
+}
 
 /*
  * Define 0-based intervals of size 'interval_length' for every region of the
@@ -184,7 +244,7 @@ def create_intervals( ref, interval_length ) {
                     end = start + interval_length
                 }
                 tmp_interval = "${contig}:${start}-${end}"
-                // println tmp_interval
+               // println tmp_interval
                 intervals.add(tmp_interval)
 
                 remaining_contig_length -= interval_length
