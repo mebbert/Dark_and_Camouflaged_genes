@@ -1,0 +1,933 @@
+---
+title: "Sample Genome Stats"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_section: true
+author: Mark Wadsworth
+date: '2022-05-12'
+params:
+  runDRFDir: "."
+  calculateBamStats: "./Calculate_Bam_Stats"
+  genesOfInterest: "./genesOfInterest.bed"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+    collapse = TRUE
+)
+
+require("BiocManager")
+
+requiredPackages = c('gridExtra', 'reshape2','ggplot2','data.table', "org.Hs.eg.db", "GenVisR", "TxDb.Hsapiens.UCSC.hg38.knownGene", "BSgenome.Hsapiens.UCSC.hg38")
+for(p in requiredPackages){
+  if(!require(p,character.only = TRUE)) BiocManager::install(p)
+  library(p,character.only = TRUE)
+}
+
+#library(ggplot2)
+#library(reshape2)
+#library(data.table)
+#library(org.Hs.eg.db)
+#library(GenVisR)
+#library(TxDb.Hsapiens.UCSC.hg38.knownGene)
+#library(BSgenome.Hsapiens.UCSC.hg38)
+#library(RIdeogram)
+#data(human_karyotype, package="RIdeogram")
+#library(parallel)
+```
+
+# Load RUN_DRF files
+
+```{r}
+AvgDepth.df = NULL
+CumulativeBases.df = NULL
+fileList = Sys.glob(paste0(params$runDRFDir, "/*GlobalStats.txt"))
+#print(fileList)
+for (file in fileList){
+  #print(file)
+  temp = read.table(file, sep="\t", header=T, row.names=1, stringsAsFactors = F)
+  #print(temp[,"AvgDepth", drop=F])
+  if (!is.null(AvgDepth.df)){
+    newCols = c(colnames(AvgDepth.df), unlist(strsplit(basename(file), "_"))[1])
+    AvgDepth.df = cbind(AvgDepth.df, temp[, "AvgDepth", drop=F])
+    colnames(AvgDepth.df) = newCols
+    
+    CumulativeBases.df = cbind(CumulativeBases.df, temp[, "NumBasePairs", drop=F])
+    colnames(CumulativeBases.df) = newCols
+  } else{
+    AvgDepth.df = as.data.frame(temp[, "AvgDepth", drop=F])
+    colnames(AvgDepth.df) = unlist(strsplit(basename(file), "_"))[1]
+    
+    CumulativeBases.df = as.data.frame(temp[, "NumBasePairs", drop=F])
+    colnames(CumulativeBases.df) = unlist(strsplit(basename(file), "_"))[1]
+  }
+}
+
+
+```
+
+# Sample Average Depth
+
+## Average Depth per Chromosome
+
+The average depth is calculated by calculating the sum from bedtools merge on the base-by-base coverage file from the 01-RUN_DRF step. This is passed to a python script that takes the sum of the per base coverage and divides it by the number of bases covered per chromosome or per genome. 
+
+Relevant lines of code:
+
+ * bin/calc_perBaseStats.py
+ * modules/01-RUN_DRF: 154-181
+
+
+```{r}
+AvgDepth.df.melt = melt(as.matrix(AvgDepth.df))
+AvgDepth.df.melt$Var1 = factor(AvgDepth.df.melt$Var1, levels = c("AllChrs", "chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8", "chr9", "chr10", "chr11", "chr12", "chr13", "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", "chr20", "chr21", "chr22", "chrX", "chrY", "chrM"))
+
+
+#ggplot(AvgDepth.df.melt[which(AvgDepth.df.melt$Var1 != "chrM"),], aes(x=Var1, y=value, fill=Var2)) + geom_bar(stat="identity", position="dodge")
+#ggplot(AvgDepth.df.melt[which(AvgDepth.df.melt$Var1 != "chrM"),], aes(x=Var1, y=value, color=Var2)) + geom_jitter(width=.1)
+ggplot(AvgDepth.df.melt[which(!AvgDepth.df.melt$Var1 %in% c("AllChrs", "chrM")),], aes(x=Var1, y=value)) + geom_boxplot() + geom_jitter(width=.1, aes(color=Var2)) + theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.title= element_blank()) + ylab("Average Depth Per Chromosome") + xlab("") 
+#ggplot(AvgDepth.df.melt[which(AvgDepth.df.melt$Var1 != "chrM"),], aes(x=Var1, y=value)) + geom_boxplot() + geom_jitter(width=.1) + coord_flip()
+
+```
+
+## Average Depth per Sample
+
+I don't have the median computed for the full genome because of time limitations.
+
+```{r}
+ggplot(AvgDepth.df.melt[which(AvgDepth.df.melt$Var1 == "AllChrs"),], aes(x=Var1, y=value)) + geom_boxplot() + geom_jitter(width=.1, aes(color=Var2)) + theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.title= element_blank()) + xlab("") + ylab("Average Depth Across All Chromosomes")
+
+hist(AvgDepth.df.melt[which(AvgDepth.df.melt$Var1 == "AllChrs"),"value"], main="Average Depth per Sample", xlab = "Average Depth per Sample", ylab = "Number of Samples") 
+```
+
+## Number of Bases in Genome
+
+This is the total number of bases in the version of the Autosomal genome used in this analysis. If there are more than one and the Standard Deviation is not 0 there is a problem.
+
+```{r}
+print(unique(unlist(CumulativeBases.df["AllChrs",])))
+print(sd(CumulativeBases.df["AllChrs",]))
+```
+
+# Extraction Region Depth
+
+## Load Extraction Region Data
+
+```{r}
+ExtractionDarkByDepthFiles = Sys.glob(paste0(params$calculateBamStats, "/*_low_depth_perRegionMetrics.bed"))
+ExtractionDarkByMapQFiles = Sys.glob(paste0(params$calculateBamStats, "/*_low_mapq_perRegionMetrics.bed"))
+
+ExtractionDarkByDepth.Avg.dt = NULL
+ExtractionDarkByMapQ.Avg.dt = NULL
+ExtractionDarkByDepth.Median.dt = NULL
+ExtractionDarkByMapQ.Median.dt = NULL
+
+for( file in ExtractionDarkByDepthFiles ){
+  temp = fread(file, sep = "\t", header = F)
+  temp$rn = paste0(temp$V1,":",temp$V2,"-",temp$V3)
+  setkey(temp, rn)
+  if(!is.null(ExtractionDarkByDepth.Avg.dt)){
+    newColName = c(colnames(ExtractionDarkByDepth.Avg.dt), unlist(strsplit(basename(file), "_"))[1])
+    ExtractionDarkByDepth.Avg.dt = merge(ExtractionDarkByDepth.Avg.dt, temp[,c("rn", "V5")], by="rn", all=T)
+    colnames(ExtractionDarkByDepth.Avg.dt) = newColName
+    
+    ExtractionDarkByDepth.Median.dt = merge(ExtractionDarkByDepth.Median.dt, temp[,c("rn", "V6")], by="rn", all=T)
+    colnames(ExtractionDarkByDepth.Median.dt) = newColName
+    
+  } else{
+    ExtractionDarkByDepth.Avg.dt = temp[,c("rn","V4", "V5")]
+    colnames(ExtractionDarkByDepth.Avg.dt) = c("rn", "ExtractionRegion", unlist(strsplit(basename(file), "_"))[1])
+    
+    ExtractionDarkByDepth.Median.dt = temp[,c("rn","V4", "V6")]
+    colnames(ExtractionDarkByDepth.Median.dt) = c("rn", "ExtractionRegion", unlist(strsplit(basename(file), "_"))[1])
+  }
+  
+}
+
+for( file in ExtractionDarkByMapQFiles ){
+  temp = fread(file, sep = "\t", header = F)
+  temp$rn = paste0(temp$V1,":",temp$V2,"-",temp$V3)
+  setkey(temp, rn)
+  if(!is.null(ExtractionDarkByMapQ.Avg.dt)){
+    newColName = c(colnames(ExtractionDarkByMapQ.Avg.dt), unlist(strsplit(basename(file), "_"))[1])
+    ExtractionDarkByMapQ.Avg.dt = merge(ExtractionDarkByMapQ.Avg.dt, temp[,c("rn", "V5")], by="rn", all=T)
+    colnames(ExtractionDarkByMapQ.Avg.dt) = newColName
+    
+    ExtractionDarkByMapQ.Median.dt = merge(ExtractionDarkByMapQ.Median.dt, temp[,c("rn", "V6")], by="rn", all=T)
+    colnames(ExtractionDarkByMapQ.Median.dt) = newColName
+  } else{
+    ExtractionDarkByMapQ.Avg.dt = temp[,c("rn","V4", "V5")]
+    colnames(ExtractionDarkByMapQ.Avg.dt) = c("rn", "ExtractionRegion", unlist(strsplit(basename(file), "_"))[1])
+    
+    ExtractionDarkByMapQ.Median.dt = temp[,c("rn","V4", "V6")]
+    colnames(ExtractionDarkByMapQ.Median.dt) = c("rn", "ExtractionRegion", unlist(strsplit(basename(file), "_"))[1])
+  }
+  
+}
+
+ExtractionDarkByDepth.Avg.df = data.frame(ExtractionDarkByDepth.Avg.dt, row.names="rn")
+ExtractionDarkByMapQ.Avg.df = data.frame(ExtractionDarkByMapQ.Avg.dt, row.names="rn")
+ExtractionDarkByDepth.Median.df = data.frame(ExtractionDarkByDepth.Median.dt, row.names="rn")
+ExtractionDarkByMapQ.Median.df = data.frame(ExtractionDarkByMapQ.Median.dt, row.names="rn")
+
+```
+
+## Dark-By-Depth
+
+The average and median depth of the extraction CDS regions. These regions constitute regions that had issues with sequencing and no variants can be called due to lack of sequencing coverage.
+
+```{r}
+extractionDarkByDepth.Avg.melt = melt(as.matrix(ExtractionDarkByDepth.Avg.df[,2:ncol(ExtractionDarkByDepth.Avg.df)]))
+extractionDarkByDepth.Median.melt = melt(as.matrix(ExtractionDarkByDepth.Median.df[,2:ncol(ExtractionDarkByDepth.Median.df)]))
+
+ggplot(extractionDarkByDepth.Avg.melt[which(extractionDarkByDepth.Avg.melt$value != "."),], aes(x=as.numeric(as.character(value)), color=Var2)) + geom_density() + theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.title= element_blank()) + xlab("Average Depth") + ggtitle("Average Depth of Dark-By-Depth Extraction Regions")
+
+ggplot(extractionDarkByDepth.Median.melt[which(extractionDarkByDepth.Median.melt$value != "."),], aes(x=as.numeric(as.character(value)), color=Var2)) + geom_density() + theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.title= element_blank()) + xlab("Median Depth") + ggtitle("Median Depth of Dark-By-Depth Extraction Regions")
+```
+
+## Dark-By-MapQ
+
+These are the log10(average depth) and log10(median depth) of extraction the regions. These Dark-by-MapQ regions constitute regions in which variants can't be called because of multiple alignments. The rescue step rescues variants in these regions. If these have high depth you can have confidence that the run is sufficient to use in downsream analyses.
+
+```{r}
+extractionDarkByMapQ.Avg.melt = melt(as.matrix(ExtractionDarkByMapQ.Avg.df[,2:ncol(ExtractionDarkByMapQ.Avg.df)]))
+extractionDarkByMapQ.Median.melt = melt(as.matrix(ExtractionDarkByMapQ.Median.df[,2:ncol(ExtractionDarkByMapQ.Median.df)]))
+
+ggplot(extractionDarkByMapQ.Avg.melt[which(extractionDarkByMapQ.Avg.melt$value != "."),], aes(x=log10(as.numeric(as.character(value))), color=Var2)) + geom_density() + theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.title= element_blank()) + xlab("log10(Average Depth)") + ggtitle("Average Depth of Dark-By-MapQ Extraction Regions")
+
+ggplot(extractionDarkByMapQ.Median.melt[which(extractionDarkByMapQ.Median.melt$value != "."),], aes(x=log10(as.numeric(as.character(value))), color=Var2)) + geom_density() + theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.title= element_blank()) + xlab("log10(Median Depth)") + ggtitle("Median Depth of Dark-By-MapQ Extraction Regions")
+```
+
+Clean up variables
+
+```{r}
+ExtractionDarkByDepth.Avg.dt = NULL
+ExtractionDarkByMapQ.Avg.dt = NULL
+ExtractionDarkByDepth.Median.dt = NULL
+ExtractionDarkByMapQ.Median.dt = NULL
+
+ExtractionDarkByDepth.Avg.df = NULL
+ExtractionDarkByMapQ.Avg.df = NULL
+ExtractionDarkByDepth.Median.df = NULL
+ExtractionDarkByMapQ.Median.df = NULL
+```
+
+
+# All Dark Region Analyses
+
+## Load Dark Region Data
+
+```{r}
+AllDarkByDepthFiles = Sys.glob(paste0(params$calculateBamStats, "/*.low_depth-merged.bed"))
+AllDarkByMapQFiles = Sys.glob(paste0(params$calculateBamStats, "/*.low_mapq-merged.bed"))
+
+CumulativeDarkByDepthBases = NULL
+CumulativeDarkByMapQBases = NULL
+
+AllDarkByDepth.Avg.dt = NULL
+AllDarkByMapQ.Avg.dt = NULL
+
+AllDarkByDepth.Median.dt = NULL
+AllDarkByMapQ.Median.dt = NULL
+
+for( file in AllDarkByDepthFiles ){
+  temp = fread(file, sep = "\t", header = F)
+  temp$rn = paste0(temp$V1,":",temp$V2,"-",temp$V3)
+  setkey(temp, rn)
+  
+  if(!is.null(AllDarkByDepth.Avg.dt)){
+    newColName = c(colnames(AllDarkByDepth.Avg.dt), unlist(strsplit(basename(file), "_"))[1])
+    AllDarkByDepth.Avg.dt = merge(AllDarkByDepth.Avg.dt, temp[,c("rn", "V4")], by="rn", all=T)
+    colnames(AllDarkByDepth.Avg.dt) = newColName
+    
+    AllDarkByDepth.Median.dt = merge(AllDarkByDepth.Median.dt, temp[,c("rn", "V5")], by="rn", all=T)
+    colnames(AllDarkByDepth.Median.dt) = newColName
+    
+    CumulativeDarkByDepthBases = rbind(CumulativeDarkByDepthBases, c(unlist(strsplit(basename(file), "_"))[1], sum(temp$V3-temp$V2)))
+  } else{
+    AllDarkByDepth.Avg.dt = temp[,c("rn","V4")]
+    colnames(AllDarkByDepth.Avg.dt) = c("rn", unlist(strsplit(basename(file), "_"))[1])
+    
+    AllDarkByDepth.Median.dt = temp[,c("rn","V5")]
+    colnames(AllDarkByDepth.Median.dt) = c("rn", unlist(strsplit(basename(file), "_"))[1])
+    
+    CumulativeDarkByDepthBases = data.frame(Sample = c(unlist(strsplit(basename(file), "_"))[1]), CumBases = c(sum(temp$V3-temp$V2)))
+  }
+  
+}
+
+for( file in AllDarkByMapQFiles ){
+  temp = fread(file, sep = "\t", header = F)
+  temp$rn = paste0(temp$V1,":",temp$V2,"-",temp$V3)
+  setkey(temp, rn)
+  if(!is.null(AllDarkByMapQ.Avg.dt)){
+    newColName = c(colnames(AllDarkByMapQ.Avg.dt), unlist(strsplit(basename(file), "_"))[1])
+    AllDarkByMapQ.Avg.dt = merge(AllDarkByMapQ.Avg.dt, temp[,c("rn", "V4")], by="rn", all=T)
+    colnames(AllDarkByMapQ.Avg.dt) = newColName
+    
+    AllDarkByMapQ.Median.dt = merge(AllDarkByMapQ.Median.dt, temp[,c("rn", "V5")], by="rn", all=T)
+    colnames(AllDarkByMapQ.Median.dt) = newColName
+    
+    CumulativeDarkByMapQBases = rbind(CumulativeDarkByMapQBases, c(unlist(strsplit(basename(file), "_"))[1], sum(temp$V3-temp$V2)))
+  } else{
+    AllDarkByMapQ.Avg.dt = temp[,c("rn","V4")]
+    colnames(AllDarkByMapQ.Avg.dt) = c("rn", unlist(strsplit(basename(file), "_"))[1])
+    
+    AllDarkByMapQ.Median.dt = temp[,c("rn","V5")]
+    colnames(AllDarkByMapQ.Median.dt) = c("rn", unlist(strsplit(basename(file), "_"))[1])
+    
+    CumulativeDarkByMapQBases = data.frame(Sample = c(unlist(strsplit(basename(file), "_"))[1]), CumBases = c(sum(temp$V3-temp$V2)))
+  }
+  
+}
+
+AllDarkByMapQ.Avg.df = data.frame(AllDarkByMapQ.Avg.dt, row.names = "rn")
+AllDarkByMapQ.Median.df = data.frame(AllDarkByMapQ.Median.dt, row.names = "rn")
+AllDarkByDepth.Avg.df = data.frame(AllDarkByDepth.Avg.dt, row.names = "rn")
+AllDarkByDepth.Median.df = data.frame(AllDarkByDepth.Median.dt, row.names = "rn")
+```
+
+## Dark-by-MAPQ
+
+### Cumulative Histogram
+
+```{r}
+hist(log10(as.numeric(CumulativeDarkByMapQBases$CumBases)), main="Cumulative Number of Dark-By-MapQ Bases", xlab = "log10(Cumulative Number of Bases Covered by Dark-By-MapQ Regions)", ylab="Number of Samples")
+```
+
+
+### Average Depth
+
+```{r}
+for(i in 1:ncol(AllDarkByMapQ.Avg.df)){
+  hist(log10(AllDarkByMapQ.Avg.df[,i]), main = paste(colnames(AllDarkByMapQ.Avg.df)[i], "Average Dark-By-MapQ Depth"), xlab="log10(Dark-By-MapQ Average Depth)")
+}
+
+
+mapqAvgDepth = melt(as.matrix(AllDarkByMapQ.Avg.df))
+
+ggplot(mapqAvgDepth, aes(x=log10(value), color=Var2)) + geom_density() + theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.title= element_blank()) + xlab("log10(Average Depth)") + ggtitle("Average Depth of Dark-By-MapQ per Extraction Region per Sample")
+```
+### Median Depth
+
+```{r}
+for(i in 1:ncol(AllDarkByMapQ.Median.df)){
+  hist(log10(AllDarkByMapQ.Median.df[,i]), main = paste(colnames(AllDarkByMapQ.Median.df)[i], "Median Dark-By-MapQ Depth"), xlab="log10(Dark-By-MapQ Median Depth)")
+}
+
+mapqMedDepth = melt(as.matrix(AllDarkByMapQ.Median.df))
+
+ggplot(mapqMedDepth, aes(x=log10(value), color=Var2)) + geom_density() + theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.title= element_blank()) + xlab("log10(Median Depth)") + ggtitle("Median Depth of Dark-By-MapQ per Extraction Region per Sample")
+```
+
+
+
+
+
+## Dark-by-Depth
+
+### Cumulative Bases
+
+```{r}
+hist(log10(as.numeric(CumulativeDarkByDepthBases$CumBases)), main="Cumulative Number of Dark-By-Depth Bases", xlab = "log10(Cumulative Number of Bases Covered by Dark-By-Depth)", ylab = "Number of Samples")
+```
+
+### Average Depth
+
+```{r}
+for(i in 1:ncol(AllDarkByDepth.Avg.df)){
+  hist(AllDarkByDepth.Avg.df[,i], main = paste(colnames(AllDarkByDepth.Avg.df)[i], "Average Dark-By-Depth Depth"), xlab="log10(Dark-By-Depth Average Depth)")
+}
+
+depthMedDepth = melt(as.matrix(AllDarkByDepth.Avg.df))
+
+ggplot(depthMedDepth, aes(x=value, color=Var2)) + geom_density() + theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.title= element_blank()) + xlab("Average Depth") + ggtitle("Average Depth of Dark-By-Depth per Extraction Region")
+```
+
+
+### Median Depth
+
+```{r}
+for(i in 1:ncol(AllDarkByDepth.Median.df)){
+  hist(AllDarkByDepth.Median.df[,i], main = paste(colnames(AllDarkByDepth.Median.df)[i], "Median Dark-By-Depth Depth"), xlab="log10(Dark-By-Depth Median Depth)")
+}
+
+depthMedDepth = melt(as.matrix(AllDarkByDepth.Median.df))
+
+ggplot(depthMedDepth, aes(x=value, color=Var2)) + geom_density() + theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.title= element_blank()) + xlab("Median Depth") + ggtitle("Median Depth of Dark-By-Depth per Extraction Region")
+```
+
+
+# Coverage of Genes of Interest
+
+
+```{r results='asis'}
+region = strsplit(rownames(AllDarkByDepth.Avg.df), ":|-")
+AllDarkByDepth.Avg.df$chr = unlist(lapply(region, `[`, 1))
+AllDarkByDepth.Avg.df$start = as.numeric(as.character(unlist(lapply(region, `[`, 2))))
+AllDarkByDepth.Avg.df$end = as.numeric(as.character(unlist(lapply(region, `[`, 3))))
+
+region = strsplit(rownames(AllDarkByMapQ.Avg.df), ":|-")
+AllDarkByMapQ.Avg.df$chr = unlist(lapply(region, `[`, 1))
+AllDarkByMapQ.Avg.df$start = as.numeric(as.character(unlist(lapply(region, `[`, 2))))
+AllDarkByMapQ.Avg.df$end = as.numeric(as.character(unlist(lapply(region, `[`, 3))))
+  
+countBasesDarkByDepth = function(chr, start, end, sample){
+  temp = AllDarkByDepth.Avg.df[which(AllDarkByDepth.Avg.df$chr == chr & start <= AllDarkByDepth.Avg.df$start & end >= AllDarkByDepth.Avg.df$end & !is.na(AllDarkByDepth.Avg.df[,sample])), c(sample, "start", "end"), drop=F]
+  return(sum(temp$end-temp$start))
+  
+}
+
+countBasesDarkByMapQ = function(chr, start, end, sample){
+  temp = AllDarkByMapQ.Avg.df[which(AllDarkByMapQ.Avg.df$chr == chr & start <= AllDarkByMapQ.Avg.df$start & end >= AllDarkByMapQ.Avg.df$end & !is.na(AllDarkByMapQ.Avg.df[,sample])), c(sample, "start", "end"), drop=F]
+  return(sum(temp$end-temp$start))
+  
+}
+
+GoI = read.table(params$genesOfInterest, header=F, sep="\t")
+GoI = unique(GoI[which(GoI$V4 !="."), "V4"])
+
+assembledOnly = c("chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8", "chr9", "chr10", "chr11", "chr12", "chr13", "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", "chr20", "chr21", "chr22", "chrX", "chrY", "chrM")
+
+
+
+GenesOfInterestFiles = Sys.glob(paste0(params$runDRFDir, "/*cov.perBase.GOI.bed"))
+
+for(gene in GoI){
+  samples = NULL
+  for(file in GenesOfInterestFiles){
+    
+    geneCov = fread(file, sep = "\t", header = F, stringsAsFactors = F)
+    geneCov.sub = geneCov[which(geneCov$V8 == gene), c(2,4),drop=F]
+    sample=unlist(strsplit(basename(file), "_"))[1]
+    colnames(geneCov.sub) = c("rn", sample)
+    
+    if(!is.null(samples)){
+      samples = merge(samples, geneCov.sub, all=T, by="rn")
+    } else {
+      samples = geneCov.sub
+    }
+    
+    
+    
+  }
+  
+  samples.df = as.data.frame(samples)
+  rownames(samples.df) = samples.df$rn
+  samples.df = samples.df[-1]
+  samples.melt = melt(as.matrix(samples.df))
+  
+  
+  ##TODO: Add gene diagram and possibly make it hoverable
+  mainplot = ggplot(samples.melt, aes(Var1, value)) + geom_smooth(se=F, span=.5,method = "loess", aes(color=Var2)) + theme_bw() + theme(legend.position="none", panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.title= element_blank()) + ggtitle(gene) + xlab(unique(geneCov[which(geneCov$V8 == gene), "V1"])) + ylab("Coverage per Sample")
+  
+  write.table(samples.df, file=paste0(gene, "_AllSamples.txt"), sep="\t", quote = F)
+  
+  stats = data.frame(mean = apply(samples.df, 2, mean, na.rm=T), median = apply(samples.df, 2, median, na.rm=T), stdev = apply(samples.df, 2, sd, na.rm=T), numDarkByDepthBases = sapply(colnames(samples.df), function(s) countBasesDarkByDepth(unname(unlist(unique(geneCov[which(geneCov$V8 == gene), "V5"]))), unname(unlist(unique(geneCov[which(geneCov$V8 == gene), "V6"]))), unname(unlist(unique(geneCov[which(geneCov$V8 == gene), "V7"]))), gsub("-",".",s))), numDarkByMapQBases = 
+sapply(colnames(samples.df), function(s) countBasesDarkByMapQ(unname(unlist(unique(geneCov[which(geneCov$V8 == gene), "V5"]))), unname(unlist(unique(geneCov[which(geneCov$V8 == gene), "V6"]))), unname(unlist(unique(geneCov[which(geneCov$V8 == gene), "V7"]))), gsub("-",".",s))))
+
+  p1 = ggplot(stats, aes(x=mean)) + geom_histogram() + theme_bw() + theme(legend.position="none", panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.title = element_blank()) + xlab("Mean Coverage") + ylab("Number of Samples")
+  
+  p2 = ggplot(stats, aes(x=median)) + geom_histogram() + theme_bw() + theme(legend.position="none", panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.title= element_blank()) + xlab("Median Coverage") + ylab("Number of Samples")
+  
+  p3 = ggplot(stats, aes(x=numDarkByDepthBases)) + geom_histogram() + theme_bw() + theme(legend.position="none", panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.title= element_blank()) + xlab("Number of Bases Covered by Dark-By-Depth Regions") + ylab("Number of Samples")
+  
+  p4 = ggplot(stats, aes(x=numDarkByMapQBases)) + geom_histogram() + theme_bw() + theme(legend.position="none", panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.title= element_blank())+ xlab("Number of Bases Covered by Dark-By-MapQ Regions") + ylab("Number of Samples")
+  
+  lay=rbind(c(1,1), c(2,3), c(4,5))
+  
+  jpeg(file = paste0(gene, ".Coverage.jpg"), height= 1000, width=1000)
+  grid.arrange(mainplot, p1, p2, p3, p4, widths=c(2,2), heights=c(5,4,4), layout_matrix=lay)
+  dev.off()
+  
+}
+
+```
+
+
+```{r results='asis', eval=T}
+
+for (gene in GoI){
+  cat(paste("##", gene))
+  img=paste0(gene,".Coverage.jpg")
+  cat(paste("![img](./", img, sep='' ) , ")\n")
+
+  }
+cat("  \n")
+```
+
+
+
+```{r eval=F}
+GoI = read.table(params$genesOfInterest, header=F, sep="\t")
+GoI = unique(GoI[which(GoI$V4 !="."), "V4"])
+
+assembledOnly = c("chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8", "chr9", "chr10", "chr11", "chr12", "chr13", "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", "chr20", "chr21", "chr22", "chrX", "chrY", "chrM")
+
+
+
+GenesOfInterestFiles = Sys.glob(paste0(params$runDRFDir, "/*cov.perBase.GOI.bed"))
+
+for(gene in GoI){
+  samples = list()
+  #TODO: Add loop to load all the files.
+  for(file in GenesOfInterestFiles){
+    
+    geneCov = fread(file, sep = "\t", header = F, stringsAsFactors = F)
+    geneCov = geneCov[which(geneCov$V8 == gene), c(1,2,3,4)]
+    colnames(geneCov) = c("chr", "start", "end", "cov")
+    sample=unlist(strsplit(basename(file), "_"))[1]
+    samples[[sample]] = geneCov
+    
+  }
+  #geneCov = cov[which(cov$V8 == gene),c(1,2,3,4)]
+  #colnames(geneCov) = c("chr", "start", "end", "cov")
+  #sample=unlist(strsplit(basename(file), "_"))[1]
+  #samples[["sample1"]] = geneCov
+
+  myGeneSymbols <- select(org.Hs.eg.db,
+                        keys = gene,
+                        columns = c("SYMBOL","ENTREZID"),
+                        keytype = "SYMBOL")
+  
+  txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene
+  
+  myGeneSymbolsTx <- select(TxDb.Hsapiens.UCSC.hg38.knownGene,
+                          keys = myGeneSymbols$ENTREZID,
+                          columns = c("GENEID", "TXID", "TXCHROM", "TXSTART", "TXEND"),
+                          keytype = "GENEID")
+  
+  genome <- BSgenome.Hsapiens.UCSC.hg38
+  
+  gr <- GRanges(seqnames = c(unique(myGeneSymbolsTx[which(myGeneSymbolsTx$TXCHROM %in% assembledOnly), "TXCHROM"])), ranges = IRanges(start = c(min(myGeneSymbolsTx[which(myGeneSymbolsTx$TXCHROM %in% assembledOnly), "TXSTART"])), end = c(max(myGeneSymbolsTx[which(myGeneSymbolsTx$TXCHROM %in% assembledOnly), "TXEND"]))),
+    strand = strand(c("+")))
+  
+  jpeg(file = paste0(gene, "_FullCoverage.jpg"), height=4000, width = 800)
+  genCov(samples, txdb, gr, genome, gene_labelTranscriptSize = 2, transform = NULL, base = NULL, gene_name = gene, label_txtSize = 4, cov_plotType = "point")
+  dev.off()
+}
+
+```
+
+
+```{r results='asis', eval=F}
+
+img_list <- list.files( path = './',  pattern = '*_FullCoverage.jpg')
+print(img_list)
+for (img in img_list){
+  cat(paste("![img](./", img, sep='' ) , ")\n")
+
+  }
+cat("  \n")
+```
+
+
+
+
+
+
+# Old Code
+
+ Dark Dark-by-Depth Avg Depth per Region Ideograms per Sample
+
+```{r eval=F}
+
+createIdeogram = function(subset.df, sampleName){
+  
+  
+  ideogramFile = paste0(sampleName, ".DarkByDepth.AvgDepth.chromosome.svg")
+  ideogram(human_karyotype, overlaid = subset.df, output=ideogramFile)
+  
+  convertSVG(ideogramFile, device = "pdf", file = gsub("svg", "", ideogramFile))
+}
+
+for(i in 1:ncol(AllDarkByDepth.Avg.df)){
+  sampleAvg = AllDarkByDepth.Avg.df[which(!is.na(AllDarkByDepth.Avg.df[,i])),i,drop=F]
+  splitRegions = strsplit(rownames(sampleAvg)[which(!is.na(sampleAvg[,1]))], ":|-")
+  sample.df = data.frame(Chr = gsub("chr", "", unlist(lapply(splitRegions, `[`, 1))), Start = as.numeric(unlist(lapply(splitRegions, `[`, 2))), End = as.numeric(unlist(lapply(splitRegions, `[`, 3))), Value = as.numeric(as.character(sampleAvg[,1])))
+  #sample.df = data.frame(Chr = gsub("chr",""unlist(lapply(splitRegions, `[`, 1))), Start = as.numeric(unlist(lapply(splitRegions, `[`, 2))), End = as.numeric(unlist(lapply(splitRegions, `[`, 3))), Value = as.numeric(as.character(AllDarkByMapQ.Avg.df[which(AllDarkByMapQ.Avg.df[,i] != "."),i])))
+  print(dim(sample.df))
+  createIdeogram(sample.df, colnames(AllDarkByDepth.Avg.df)[i])
+  
+}
+```
+```{r results = 'asis', eval=F}
+img_list <- list.files( path = './',  pattern = '*DarkByDepth.AvgDepth.chromosome.jpg$')
+
+for (img in img_list){
+  cat(paste("![img](./", img, sep='' ) , ")\n")
+
+  }
+cat("  \n")
+```
+
+Clean up variables
+
+```{r}
+AllDarkByDepth.Avg.df = NULL
+AllDarkByDepth.Median.df = NULL
+```
+
+
+ Ideogram of all Dark Regions per Sample
+
+```{r eval=F}
+library(karyoploteR)
+library(regioneR)
+
+library(readr)
+MapQCov = read.table("Calculate_Bam_Stats/A-CUHS-CU002010-BL-COL-25459BL1.cov.bed.gz", header=F, sep="\t")
+```
+```{r eval=F}
+kp <- plotKaryotype(plot.type=2, main="plot.type=3")
+darkByMapQ <- toGRanges(MapQCov[,c(1,2,3,5)])
+
+kpPlotCoverage(kp, data=darkByMapQ, data.panel=1)
+```
+
+```{r eval=F}
+
+library(karyoploteR)
+
+kp <- plotKaryotype(plot.type=2, main="plot.type=3")
+sampleAvg = AllDarkByDepth.Avg.df[which(!is.na(AllDarkByDepth.Avg.df[,1])), 1,drop=F]
+splitRegions = strsplit(rownames(sampleAvg), ":|-")
+sampleAvgDepth.df = data.frame(Chr = unlist(lapply(splitRegions, `[`, 1)), Start = as.numeric(unlist(lapply(splitRegions, `[`, 2))), End = as.numeric(unlist(lapply(splitRegions, `[`, 3))), Value = log10(as.numeric(as.character(sampleAvg[,1]))))
+  
+sampleAvg = AllDarkByMapQ.Avg.df[which(!is.na(AllDarkByMapQ.Avg.df[,1])), 1,drop=F]
+splitRegions = strsplit(rownames(sampleAvg), ":|-")
+sampleAvgMapQ.df = data.frame(Chr = unlist(lapply(splitRegions, `[`, 1)), Start = as.numeric(unlist(lapply(splitRegions, `[`, 2))), End = as.numeric(unlist(lapply(splitRegions, `[`, 3))), Value = log10(as.numeric(as.character(sampleAvg[,1]))))
+
+library(regioneR)
+
+darkByDepth <- toGRanges(sampleAvgDepth.df)
+darkByMapQ <- toGRanges(sampleAvgMapQ.df)
+  
+kpPlotDensity(kp, data=darkByDepth, data.panel=1)
+#kpPlotCoverage(kp, data=darkByMapQ, data.panel=2)
+
+#kpAxis(kp, data.panel=1, ymin = 0, ymax = max(sampleAvgDepth.df$Value))
+#kpAxis(kp, data.panel=2, ymin = 0, ymax = max(sampleAvgMapQ.df$Value))
+
+#htmlwidgets::saveWidget(kp, "IdeogramCoverage.png")
+```
+
+
+```{r eval=F}
+library(RCircos)
+
+#AllSamples.df = NULL
+for (sampleName in colnames(AllDarkByDepth.Avg.df)) {
+  # Load hg38 and draw ideogram in RCircos
+  data(UCSC.HG38.Human.CytoBandIdeogram) 
+  RCircos.Set.Core.Components(cyto.info=UCSC.HG38.Human.CytoBandIdeogram,
+                       chr.exclude=NULL,tracks.inside=5,tracks.outside=0)
+  RCircos.Set.Plot.Area()
+  RCircos.Chromosome.Ideogram.Plot() 
+  
+ 
+  sampleAvg = AllDarkByDepth.Avg.df[which(!is.na(AllDarkByDepth.Avg.df[,sampleName])), sampleName,drop=F]
+  splitRegions = strsplit(rownames(sampleAvg), ":|-")
+  sampleAvgDepth.df = data.frame(Chr = unlist(lapply(splitRegions, `[`, 1)), Start = as.numeric(unlist(lapply(splitRegions, `[`, 2))), End = as.numeric(unlist(lapply(splitRegions, `[`, 3))), Value = as.numeric(as.character(sampleAvg[,1])))
+  
+  RCircos.Histogram.Plot(sampleAvgDepth.df,data.col = 4,
+					track.num = 1,side = 'in', min.value = 0, max.value = 10)
+  
+  sampleAvg = AllDarkByMapQ.Avg.df[which(!is.na(AllDarkByMapQ.Avg.df[,sampleName])), sampleName,drop=F]
+  splitRegions = strsplit(rownames(sampleAvg), ":|-")
+  sampleAvgMapQ.df = data.frame(Chr = unlist(lapply(splitRegions, `[`, 1)), Start = as.numeric(unlist(lapply(splitRegions, `[`, 2))), End = as.numeric(unlist(lapply(splitRegions, `[`, 3))), Value = as.numeric(as.character(sampleAvg[,1])))
+  
+  RCircos.Histogram.Plot(sampleAvgMapQ.df,data.col = 4,
+					track.num = 2,side = 'in', min.value = 0, max.value = 100)
+  
+  
+  
+  #RCircos.Heatmap.Plot(AllDarkByDepth.Avg.df, data.col = 4:ncol(AllDarkByDepth.Avg.df), track.num = 1, side = "in")
+ 
+  
+#  samplesAvg = AllDarkByDepth.Avg.df[which(!is.na(AllDarkByDepth.Avg.df[,sampleName])), sampleName,drop=F]
+#  splitRegions = strsplit(rownames(sampleAvg), ":|-")
+#  sampleAvgDepth.df = data.frame(Chr = unlist(lapply(splitRegions, `[`, 1)), Start = as.numeric(unlist(lapply(splitRegions, `[`, 2))), End = as.numeric(unlist(lapply(splitRegions, `[`, 3))), Value = as.numeric(as.character(sampleAvg[,1])))
+#  AllSamples.df = rbind(AllSamples.df, sampleAvgDepth.df)
+}
+
+#data(UCSC.HG38.Human.CytoBandIdeogram) 
+#RCircos.Set.Core.Components(cyto.info=UCSC.HG38.Human.CytoBandIdeogram, chr.exclude=NULL,tracks.inside=5,tracks.outside=0)
+#RCircos.Set.Plot.Area()
+#RCircos.Chromosome.Ideogram.Plot() 
+#
+#RCircos.Heatmap.Plot(AllSamples.df, data.col = 4, track.num = 1, side = "in")
+
+# Load hg19 and draw ideogram in RCircos
+##data(UCSC.HG38.Human.CytoBandIdeogram) 
+#RCircos.Set.Core.Components(cyto.info=UCSC.HG38.Human.CytoBandIdeogram,
+#                     chr.exclude=NULL,tracks.inside=5,tracks.outside=0)
+#RCircos.Set.Plot.Area()
+#RCircos.Chromosome.Ideogram.Plot() 
+#
+## Load data for scatter track
+#data(RCircos.Scatter.Data)
+#
+## Add scatter track into plot
+#RCircos.Scatter.Plot(RCircos.Scatter.Data, data.col=5,track.num=1, 
+#					side='in', by.fold=1) 
+#
+## Load data for histogram track
+#data(RCircos.Histogram.Data)
+#
+## Add histogram track into plot
+#RCircos.Histogram.Plot(RCircos.Histogram.Data,data.col = 4,
+#					track.num = 3,side = 'in')
+#
+#data("RCircos.Heatmap.Data")
+```
+
+ Genes of Interest
+
+```{r eval=F}
+print(params$genesOfInterest)
+GoI = read.table(params$genesOfInterest, header=F, sep="\t")
+
+ExtractionDarkByDepthFiles = Sys.glob(paste0(params$calculateBamStats, "/*.low_depth_extractionCoverage.bed.gz"))
+ExtractionDarkByMapQFiles = Sys.glob(paste0(params$calculateBamStats, "/*.low_mapq_extractionCoverage.bed.gz"))
+
+ExtractDarkByDepth.list = list()
+ExtractDarkByMapQ.list = list()
+
+#temp = fread("Calculate_Bam_Stats/CR1.bed", sep="\t", header=F)
+
+for (gene in GoI[, "V1"]){
+  print(gene)
+  for (file in ExtractionDarkByDepthFiles){
+    temp = fread(cmd=paste0('zgrep -e \"\t',gene , "\" ", file), sep = "\t", header = F, stringsAsFactors = F)
+    temp = as.data.frame(temp[which(temp$V6 != "."), c(6:8,10)])
+    colnames(temp) = c("chr", "start", "end", "cov")
+    temp$start = as.numeric(as.character(temp$start))
+    temp$end = as.numeric(as.character(temp$end))
+    temp$cov = as.numeric(as.character(temp$cov))
+    sample=unlist(strsplit(basename(file), "_"))[1]
+    ExtractDarkByDepth.list[[sample]] = temp
+    #temp$rn = paste0(temp$V6,":",temp$V7,"-",temp$V8)
+  #  #temp$rn = paste0(temp$V1,":",temp$V2,"-",temp$V3)
+  #  setkey(temp, rn)
+  #  
+#    if(!is.null(ExtractDarkByDepth.dt)){
+#      newColName = c(colnames(ExtractDarkByDepth.dt), unlist(strsplit(basename(file), "_"))[1])
+#      ExtractDarkByDepth.dt = merge(ExtractDarkByDepth.dt, temp[,c("rn", "V10")], by="rn", all=T)
+#      colnames(ExtractDarkByDepth.dt) = newColName
+#    } else{
+#      ExtractDarkByDepth.dt = temp[,c("rn", "V10")]
+#      colnames(ExtractDarkByDepth.dt) = c("rn", unlist(strsplit(basename(file), "_"))[1])
+#    }
+  }
+#  
+  for (file in ExtractionDarkByMapQFiles){
+    temp = fread(cmd=paste0('zgrep -e \"\t',gene , "\" ", file), sep = "\t", header = F, stringsAsFactors = F)
+    temp = as.data.frame(temp[which(temp$V6 != "."), c(6:8,10)])
+    colnames(temp) = c("chr", "start", "end", "cov")
+    temp$start = as.numeric(as.character(temp$start))
+    temp$end = as.numeric(as.character(temp$end))
+    temp$cov = as.numeric(as.character(temp$cov))
+    sample=unlist(strsplit(basename(file), "_"))[1]
+    ExtractDarkByMapQ.list[[sample]] = temp
+#    temp = fread(cmd=paste0('gunzip -cq ', file), sep = "\t", header = F)
+#    temp$rn = paste0(temp$V6,":",temp$V7,"-",temp$V8)
+#    #temp$rn = paste0(temp$V1,":",temp$V2,"-",temp$V3)
+#    setkey(temp, rn)
+#    if(!is.null(ExtractDarkByMapQ.dt)){
+#      newColName = c(colnames(ExtractDarkByMapQ.dt), unlist(strsplit(basename(file), "_"))[1])
+#      ExtractDarkByMapQ.dt = merge(ExtractDarkByMapQ.dt, temp[,c("rn", "V10")], by="rn", all=T)
+#      colnames(ExtractDarkByMapQ.dt) = newColName
+#    } else{
+#      ExtractDarkByMapQ.dt = temp[,c("rn","V4", "V10")]
+#      colnames(ExtractDarkByMapQ.dt) = c("rn", "ExtractionAnno", unlist(strsplit(basename(file), "_"))[1])
+#    }
+  }
+  library(org.Hs.eg.db)
+  myGeneSymbols <- select(org.Hs.eg.db,
+                        keys = gene,
+                        columns = c("SYMBOL","ENTREZID"),
+                        keytype = "SYMBOL")
+  
+  library(GenVisR)
+  library(TxDb.Hsapiens.UCSC.hg38.knownGene)
+  txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene
+  
+  myGeneSymbolsTx <- select(TxDb.Hsapiens.UCSC.hg38.knownGene,
+                          keys = myGeneSymbols$ENTREZID,
+                          columns = c("GENEID", "TXID", "TXCHROM", "TXSTART", "TXEND"),
+                          keytype = "GENEID")
+  
+  library(BSgenome.Hsapiens.UCSC.hg38)
+  genome <- BSgenome.Hsapiens.UCSC.hg38
+  
+  gr <- GRanges(seqnames = c(unique(myGeneSymbolsTx$TXCHROM)), ranges = IRanges(start = c(min(myGeneSymbolsTx$TXSTART)), end = c(max(myGeneSymbolsTx$TXEND))),
+    strand = strand(c("+")))
+  
+  # Call genCov
+  jpeg(file = paste0(gene, "_DarkByDepth.jpg"), height=4000, width = 1000)
+  genCov(ExtractDarkByDepth.list, txdb, gr, genome, gene_labelTranscriptSize = 2, transform = NULL, base = NULL, gene_name = gene, label_txtSize = 4, cov_plotType = "point")
+  dev.off()
+  
+  
+  jpeg(file = paste0(gene, "_DarkByMapQ.jpg"), height=4000, width = 1000)
+  genCov(ExtractDarkByMapQ.list, txdb, gr, genome, gene_labelTranscriptSize = 2, transform = NULL, base = NULL, gene_name = gene, label_txtSize = 4, cov_plotType = "point")
+  dev.off()
+  
+#  for(i in seq(1, length(ExtractDarkByDepth.list),3)){
+#    if(i+2 < length(ExtractDarkByDepth.list)) {
+#      genCov(ExtractDarkByDepth.list[seq(i,i+2)], txdb, gr, genome, gene_labelTranscriptSize = 2, transform = NULL, base = NULL, gene_name = gene)
+#    } else {
+#      genCov(ExtractDarkByDepth.list[seq(i, length(ExtractDarkByDepth.list))], txdb, gr, genome, gene_labelTranscriptSize = 2, transform = NULL, base = NULL, gene_name = gene)
+#    }
+#  }
+#  
+#  for(i in seq(1, length(ExtractDarkByMapQ.list),3)){
+#    if(i+2 < length(ExtractDarkByMapQ.list)) {
+#      genCov(ExtractDarkByMapQ.list[seq(i,i+2)], txdb, gr, genome, gene_labelTranscriptSize = 2, transform = NULL, base = NULL, gene_name = gene)
+#    } else {
+#      genCov(ExtractDarkByMapQ.list[seq(i, length(ExtractDarkByMapQ.list))], txdb, gr, genome, gene_labelTranscriptSize = 2, transform = NULL, base = NULL, gene_name = gene)
+#    }
+#  }
+  
+}
+
+```
+
+
+```{r eval=F}
+jpeg(file = paste0(".jpg"), height=4000, width = 1000)
+genCov(ExtractDarkByDepth.list, txdb, gr, genome, gene_labelTranscriptSize = 2, transform = NULL, base = NULL, gene_name = gene, label_txtSize = 4, cov_plotType = "point")
+dev.off()
+```
+
+```{r eval=F}
+print(params$genesOfInterest)
+GoI = read.table(params$genesOfInterest, header=F, sep="\t")
+
+ExtractionDarkByDepthFiles = Sys.glob(paste0(params$calculateBamStats, "/*.low_depth_extractionCoverage.bed.gz"))
+ExtractionDarkByMapQFiles = Sys.glob(paste0(params$calculateBamStats, "/*.low_mapq_extractionCoverage.bed.gz"))
+
+ExtractDarkByDepth.dt = NULL
+ExtractDarkByMapQ.dt = NULL
+
+temp = fread("Calculate_Bam_Stats/CR1.bed", sep="\t", header=F)
+
+for (gene in GoI[1, "V1"]){
+  print(gene)
+  for (file in ExtractionDarkByDepthFiles){
+    temp = fread(cmd=paste0('zgrep -e \"\t',gene , "\" ", file), sep = "\t", header = F)
+    temp = temp[which(temp$V6 != "."),]
+    print(head(temp))
+    temp$rn = paste0(temp$V6,":",temp$V7,"-",temp$V8)
+  #  #temp$rn = paste0(temp$V1,":",temp$V2,"-",temp$V3)
+  #  setkey(temp, rn)
+  #  
+    if(!is.null(ExtractDarkByDepth.dt)){
+      newColName = c(colnames(ExtractDarkByDepth.dt), unlist(strsplit(basename(file), "_"))[1])
+      ExtractDarkByDepth.dt = merge(ExtractDarkByDepth.dt, temp[,c("rn", "V10")], by="rn", all=T)
+      colnames(ExtractDarkByDepth.dt) = newColName
+    } else{
+      ExtractDarkByDepth.dt = temp[,c("rn", "V10")]
+      colnames(ExtractDarkByDepth.dt) = c("rn", unlist(strsplit(basename(file), "_"))[1])
+    }
+  }
+#  
+#  for (file in ExtractionDarkByMapQFiles){
+#    temp = fread(cmd=paste0('gunzip -cq ', file), sep = "\t", header = F)
+#    temp$rn = paste0(temp$V6,":",temp$V7,"-",temp$V8)
+#    #temp$rn = paste0(temp$V1,":",temp$V2,"-",temp$V3)
+#    setkey(temp, rn)
+#    if(!is.null(ExtractDarkByMapQ.dt)){
+#      newColName = c(colnames(ExtractDarkByMapQ.dt), unlist(strsplit(basename(file), "_"))[1])
+#      ExtractDarkByMapQ.dt = merge(ExtractDarkByMapQ.dt, temp[,c("rn", "V10")], by="rn", all=T)
+#      colnames(ExtractDarkByMapQ.dt) = newColName
+#    } else{
+#      ExtractDarkByMapQ.dt = temp[,c("rn","V4", "V10")]
+#      colnames(ExtractDarkByMapQ.dt) = c("rn", "ExtractionAnno", unlist(strsplit(basename(file), "_"))[1])
+#    }
+#  }
+
+}
+
+```
+
+```{r eval=F}
+print(params$genesOfInterest)
+GoI = read.table(params$genesOfInterest, header=F, sep="\t")
+
+library(igvR)
+options(width=120)
+knitr::opts_chunk$set(
+   ollapse = TRUE,
+   eval=interactive(),
+   echo=TRUE,
+   comment = "#>"
+)
+
+
+igv <- igvR()
+setBrowserWindowTitle(igv, "Genes of Interest")
+setGenome(igv, "hg38")
+
+for (gene in GoI$V1){
+  showGenomicRegion(igv, gene)
+}
+
+
+loc <- getGenomicRegion(igv)
+size <- with(loc, 1 + end - start)
+starts <- seq(loc$start, loc$end, by=5)
+ends   <- starts + 5
+values <- sample(1:100, size=length(starts), replace=TRUE)
+
+#tbl.bedGraph <- data.frame(chrom=rep("chr8", length(starts)), start=starts, end=ends,
+                           #value=values, stringsAsFactors=FALSE)
+
+tbl.bedGraph = read.table("Calculate_Bam_Stats/A-CUHS-CU002010-BL-COL-25459BL1_vcpa1.0_GRU-IRB-PUB.min_depth_-1.min_mapq_mass_-1.mapq_thresh_9.dark.low_mapq.final.dark.all.dark.regions.bed", header=F,sep="\t")
+
+track <- DataFrameQuantitativeTrack("bedGraph", tbl.bedGraph[,1:4], color="red", autoscale=FALSE,
+                                    min=80, max=100)
+displayTrack(igv, track)
+
+```
+
+ Dark Dark-by-MapQ Avg Depth per Region Ideograms per Sample
+
+```{r eval=F}
+library(cowplot) 
+
+createIdeogram = function(subset.df, sampleName){
+  
+  
+  ideogramFile = paste0(sampleName, ".DarkByMapQ.AvgDepth.chromosome.svg")
+  ideogram(human_karyotype, overlaid = subset.df, output=ideogramFile)
+  
+  #convertSVG(ideogramFile, device = "pdf", file = gsub("svg", "", ideogramFile))
+  str = charToRaw(readChar(ideogramFile, file.info(ideogramFile)$size))
+  head(str)
+  rsvg_png(str, file = gsub("svg", "jpg", ideogramFile))
+}
+
+for(i in 1:ncol(AllDarkByMapQ.Avg.df)){
+  sampleAvg = AllDarkByMapQ.Avg.df[which(!is.na(AllDarkByMapQ.Avg.df[,i])),i,drop=F]
+  splitRegions = strsplit(rownames(sampleAvg)[which(!is.na(sampleAvg[,1]))], ":|-")
+  sample.df = data.frame(Chr = gsub("chr", "", unlist(lapply(splitRegions, `[`, 1))), Start = as.numeric(unlist(lapply(splitRegions, `[`, 2))), End = as.numeric(unlist(lapply(splitRegions, `[`, 3))), Value = as.numeric(as.character(sampleAvg[,1])))
+  #sample.df = data.frame(Chr = gsub("chr",""unlist(lapply(splitRegions, `[`, 1))), Start = as.numeric(unlist(lapply(splitRegions, `[`, 2))), End = as.numeric(unlist(lapply(splitRegions, `[`, 3))), Value = as.numeric(as.character(AllDarkByMapQ.Avg.df[which(AllDarkByMapQ.Avg.df[,i] != "."),i])))
+  print(dim(sample.df))
+  createIdeogram(sample.df, colnames(AllDarkByMapQ.Avg.df)[i])
+  
+}
+
+```
+```{r results = 'asis', eval=F }
+img_list <- list.files( path = './',  pattern = '*DarkByMapQ.AvgDepth.chromosome.jpg')
+print(img_list)
+for (img in img_list){
+  cat(paste("![img](./", img, sep='' ) , ")\n")
+
+  }
+cat("  \n")
+```
