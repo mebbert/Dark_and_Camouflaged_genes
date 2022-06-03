@@ -24,11 +24,12 @@ workflow CALCULATE_BAM_STATS_WF {
 	//println sample_tuple
         GENERATE_LOW_MAPQ_AND_DEPTH_BEDS_PROC( sample_tuple )
             | MERGE_DARK_REGIONS_PROC
+//            | GENERATE_REPORT_PROC
            // | CALC_BAM_STATS_PROC
 	
 
     emit:
-        MERGE_DARK_REGIONS_PROC.out
+        MERGE_DARK_REGIONS_PROC.out.collect()
 }
 
 process GENERATE_LOW_MAPQ_AND_DEPTH_BEDS_PROC {
@@ -172,6 +173,46 @@ process MERGE_DARK_REGIONS_PROC {
 
     """
 }
+
+process GENERATE_REPORT_PROC {
+
+    publishDir("${params.results_dir}/04-REPORT", mode: 'copy')
+
+    label 'GENERATE_REPORT'
+
+    input:
+        //tuple val(sample_name),
+           // path('low_depth-merged') from dark_region_files.collect()
+            //path('*.low_mapq-merged.bed'),
+            //path('*_perRegionMetrics.bed'),
+            //path('*.all.dark.regions.bed'),
+            //path('*_extractionCoverage.bed.gz'),
+            
+            val info from dark_region_files.collect()
+
+    output:
+	tuple val(sample_name),
+            path("*.html"), emit: report
+
+    script:
+
+
+    """
+	
+        runDRFPath=`realpath '${params.results_dir}/01-RUN_DRF'`
+        calcStatsPath=`realpath '${params.results_dir}/02-CALCULATE_BAM_STATS'`
+        GOI=`realpath '${params.genes_of_interest}'`
+        
+        echo \$runDRFPath
+        echo \$calcStatsPath
+        echo \$GOI
+
+	Rscript -e "rmarkdown::render('${params.Report_Rmd}', params=list('runDRFDir'='\$runDRFPath', 'calculateBamStats' = '\$calcStatsPath', 'genesOfInterest' = '\$GOI') , clean=T, output_file = './${params.masked_ref_tag}_${params.sample_input_tag}_Report.html', output_dir = './')"
+
+    """
+
+}
+
 
 
 process CALC_BAM_STATS_PROC {
