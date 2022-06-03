@@ -18,11 +18,19 @@ workflow RESCUE_CAMO_VARS_WF {
                     checkIfExists: true)
             | set { input_files_ch }
 
+        /*
+         * Recursively collect all index files for the .(cr|b)am files from the 
+         * user-provided input_sample_path.
+         */
+        Channel.fromPath("${params.input_sample_path}//**.{bam,cram}.{crai,bai}",
+                    checkIfExists: true)
+            | set { input_files_index_ch }
+
 
         /*
          * Prep batch files for RESCUE_CAMO_VARS_PROC
          */
-        PREP_BATCH_FILES_PROC( input_files_ch.collect() )
+        PREP_BATCH_FILES_PROC( input_files_ch.collect(), input_files_index_ch.collect() )
 //        PREP_BATCH_FILES_PROC( "${params.input_sample_path}" )
 
         /*
@@ -61,10 +69,11 @@ workflow RESCUE_CAMO_VARS_WF {
              .map { repeat, dirname, masked_ref_fasta, gvcf_files, region ->
                  tuple( dirname, region, masked_ref_fasta, gvcf_files )
              }| COMBINE_AND_GENOTYPE_PROC
+        //COMBINE_AND_GENOTYPE_PROC.out.combined_vcfs.unique().groupTuple().view()
 
     emit:
-        COMBINE_AND_GENOTYPE_PROC.out.combined_gvcfs.unique().groupTuple(sort:{ a,b -> 
-            file_name_pattern = ~/full_cohort\.combined\.chr([\dXY]*)_(\d*)-(\d*)\.ploidy_(\d*)\.g\.vcf/
+        COMBINE_AND_GENOTYPE_PROC.out.combined_vcfs.unique().groupTuple(sort:{ a,b -> 
+            file_name_pattern = ~/full_cohort\.combined\.chr([\dXY]*)_(\d*)-(\d*)\.ploidy_(\d*)\.vcf/
             def (_A, chrA, startA, endA, ploidyA) = (a =~ file_name_pattern)[0]
             def (_B, chrB, startB, endB, ploidyB) = (b =~ file_name_pattern)[0]
             chrA = chrA?.isInteger() ? chrA as Integer : chrA
@@ -95,7 +104,7 @@ workflow RESCUE_CAMO_VARS_WF {
             } else if (endA > endB) {
                 return 1;
             } else {
-                return 1;
+                return 0;
             }
 
         })
@@ -114,6 +123,7 @@ process PREP_BATCH_FILES_PROC {
 
     input:
         path( input_files )
+        path( input_files_index )
 
 	output:
 		path('bam_set_*', emit: bam_sets)
@@ -193,6 +203,7 @@ process RESCUE_CAMO_VARS_PROC {
 	"""
 		bash rescue_camo_variants.sh \\
             "${params.masked_ref_fasta}" \\
+            "${params.unmasked_ref_fasta}" \\
             "${params.extraction_bed}" \\
             "${params.gatk_bed}" \\
             "${bam_set}" \\
@@ -249,11 +260,6 @@ process COMBINE_AND_GENOTYPE_PROC {
     echo "Ploidy group: ${ploidy_group}"
     echo "Region: ${region_string}"
     echo "Ref: ${masked_ref_fasta}"
-
-    for gvcf_file in ${gvcf_files}
-    do
-        echo "GVCF file: \${gvcf_file}"
-    done
 
     cat << __EOF__ > "${ploidy_group}.gvcf.list"
     ${gvcf_files.join('\n'+' '*4)}

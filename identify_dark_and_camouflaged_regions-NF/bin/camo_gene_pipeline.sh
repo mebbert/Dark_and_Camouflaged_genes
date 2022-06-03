@@ -520,10 +520,10 @@ bedtools intersect \
 ## The GATK bed is the CDS mask_bed regions that are exclusively camo,
 ## The normal mask_bed lists the whole genebody element, GATK restricts to just those camo regions
 #
-# TODO (Maddy): Verify that we don't run into the issue below when running the CDS-only GATK bed
-# file
 grep -vE "^#" $camo_annotations | \
 	awk '$5 == "CDS"' | \
+	sort -k1,1 -k2,2n |
+	bedtools merge | \
 	bedtools intersect \
 		-a $alignto_sorted \
 		-b -\
@@ -542,10 +542,11 @@ grep -vE "^#" $camo_annotations | \
 # gene bodies on opposite strands (see above for more details). As a result, this intersect results
 # in duplicate entries that are almost identical that need to be merged.
 #
-# TODO (Maddy): Incorporate a bedtools merge command *after* the intersect.
 # TODO (Maddy): Write a script to verify that the camo sets for merged coordinates are *identical*
 #               to ensure we aren't missing another edge case.
 grep -vE "^#" $camo_annotations | \
+	sort -k1,1 -k2,2n |
+	bedtools merge | \
 	bedtools intersect \
 		-a $alignto_sorted \
 		-b -\

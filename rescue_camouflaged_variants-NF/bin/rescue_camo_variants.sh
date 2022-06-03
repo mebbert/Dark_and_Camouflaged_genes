@@ -8,23 +8,26 @@ echo "Job running on: `hostname`"
 # The masked ref fasta
 ref=$1
 
+# the unmasked ref fasta to be used for bamtofastq for crams
+unmasked_ref=$2
+
 # The bed file to use for extracting reads from each sample
-extraction_bed=$2		
+extraction_bed=$3		
 echo "Extraction bed: $extraction_bed"
 
 # The bed file to use for calling variants. This will make GATK much faster.
 # Using a different bed file here because the regions are restricted to the
 # exact camo CDS regions.
-gatk_bed=$3
+gatk_bed=$4
 echo "GATK bed: $gatk_bed"
 
 
 # A file with the list of bams to run
-bam_list=$4
+bam_list=$5
 echo "Bam list file: $bam_list"
 
 # The max number of repeat regions to consider
-max_repeat=$5
+max_repeat=$6
 echo "Max repeats: $max_repeat"
 
 # The min number of repeat regions to consider. By definition, two is the fewest.
@@ -33,7 +36,7 @@ min_repeat=2 #
 
 # Whether to clean tmp files on the fly. This process could could overwhelm a
 # file system (depending on how large the run is).
-clean_tmp_files=$6
+clean_tmp_files=$7
 
 # Create a new list for GATK for each ploidy
 for repeat_num in $(seq $min_repeat 1 $max_repeat)
@@ -46,7 +49,7 @@ done
 # Regex to extract sample name from Bam header
 sample_regex="SM:([A-Za-z0-9_\-]+)"
 
-threads=$7
+threads=$8
 
 # Create GATK environment variable for convenience.
 GATK="gatk --java-options -Xmx20G "
@@ -99,6 +102,7 @@ do
 
 	tmp_bam=${sampleName}.sorted_by_name.bam
 
+
 	#######################################
 	# Rescue variants for each ploidy set #
 	#######################################
@@ -135,6 +139,7 @@ do
 		fq2=${sampleName}_R2.fastq
 
 		# TODO: Handle bam & cram!
+		export CRAM_REFERENCE=$unmasked_ref
 		time bedtools bamtofastq -i $tmp_bam -fq $fq1 -fq2 $fq2 2> /dev/null
 
 		##################

@@ -37,7 +37,7 @@ process CAT_VARIANTS_PROC {
         tuple val(ploidy), path(gvcfs)
 
 	output:
-		path('*${ploidy}.vcf', emit: ploidy_vcf)
+		path("*${ploidy}.vcf", emit: ploidy_vcf)
 
 	script:
 	"""
@@ -53,6 +53,7 @@ process CAT_VARIANTS_PROC {
                 O=\$out \
                 \$inputFiles \
                 R=${params.unmasked_ref_fasta}
+            echo "Completed gatherVCFs"
 
 	"""
 }
@@ -74,13 +75,10 @@ process COMBINE_PLOIDY_PROC {
 
         script:
         """
-        input_string=""
-        for ploidy_vcf in ${ploidy_vcfs}
-        do
-            \$input_string="\${input_string} I=\${ploidy_vcf}"
-        done
+        input_string="${ploidy_vcfs.join(' I=')}"
+        input_string="I= \${input_string}"
 
-        \$PICARD SortVcf\
+        java -jar \$PICARD SortVcf\
             \${input_string} \
             O=full_cohort.ADSP_WES.camo_genes.genotyped.hg38.combined.vcf
 
@@ -110,8 +108,9 @@ process GET_VARIANT_METRICS_PROC {
             VARIANT_METRICS=filtered.variant_metrics.txt
 
             calc_genotype_annotations.py ${combined_vcf} > \$ANNOTATED
-            filter.py \$ANNOTATED ${params.ref_based_artifact_bed} > \$FILTERED
-            extractVariantQualityMetrics.py \$FILTERED > \$VARIANT_METRICS
+            # filter.py \$ANNOTATED ${params.ref_based_artifact_bed} > \$FILTERED
+            # extractVariantQualityMetrics.py \$FILTERED > \$VARIANT_METRICS
+            extractVariantQualityMetrics.py \$ANNOTATED > \$VARIANT_METRICS
 
         """
 }
@@ -135,7 +134,7 @@ process GET_GENE_NUM_PROC {
         script:
         """
             awk '\$6 == "PASS" && \$9 >= 2.0' ${variant_metrics} | \
-                bedtools interesct \
+                bedtools intersect \
                     -a ${params.annotation_bed} \
                     -b - | \
                 awk '\$4 == "CDS" {print \$NF}' | \

@@ -42,7 +42,7 @@ params.current_ref_fasta = "${projectDir}/../references/1KGenomes_hg38-2015/GRCh
  * already identified camouflaged regions for, it can be prepared using our
  * pipeline for identifying camouflaged regions (de novo).
  */
-params.extraction_bed = "${projectDir}/test_data/CR1-extraction-1KG_ref.bed"
+params.extraction_bed = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_05_17-11.58.12/05-CREATE_BED_FILE/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.camo.extraction.sorted.bed"
 
 
 /*
@@ -52,7 +52,7 @@ params.extraction_bed = "${projectDir}/test_data/CR1-extraction-1KG_ref.bed"
  * not been masked for camouflaged regions, rescuing camouflaged variants will
  * not work.
  */
-params.masked_ref_fasta = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_03_21-10.52.02/06-MASK_GENOME/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.fa"
+params.masked_ref_fasta = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_05_17-11.58.12/06-MASK_GENOME/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.fa"
 
 
 /*
@@ -69,7 +69,7 @@ params.unmasked_ref_fasta = "${projectDir}/../references/1KGenomes_hg38-2015/GRC
  * in the NextFlow process that identifies false positives (a.k.a.
  * reference-based artifacts).
  */
-params.masked_ref_tag = '1KGenomes_GRCh38_full_analysis_set_plus_decoy_hla'
+params.masked_ref_tag = 'illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla'
 
 
 /*
@@ -102,7 +102,7 @@ params.sample_input_tag = "Test_samples"
  * must have coordinates specific to the reference genome being used in the
  * 'masked_ref_fasta' and the `unmasked_ref_fasta` arguments.
  */
-params.mask_bed = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_03_21-10.52.02/05-CREATE_BED_FILE/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.camo.mask_bed.sorted.bed"
+params.mask_bed = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_05_17-11.58.12/05-CREATE_BED_FILE/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.camo.mask_bed.sorted.bed"
 
 /*
  * Path to the .bed file that GATK will use to call variants. This MUST
@@ -124,13 +124,19 @@ params.mask_bed = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/res
  * TODO: Was previously only CDS. Currently adding support for all gene-body
  * elements, but we still ignore anything outside of gene bodies.
  */
-params.gatk_bed = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_03_21-10.52.02/05-CREATE_BED_FILE/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.camo.GATK.all_camo_regions.bed"
+params.gatk_bed = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_05_17-11.58.12/05-CREATE_BED_FILE/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.camo.GATK.all_camo_regions.bed"
+
+/*
+ * This is the *.annotation.bed file that comes from the step
+ * 04-PREPARE_ANNOTATION_BED in the workflow to define camo regions. 
+ */
+params.annotation_bed = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_05_17-11.58.12/04-PREPARE_ANNOTATION_BED/Homo_sapiens.GRCh38.105.chr_added.annotation.bed"
 
 /*
  * This is the *.camo_annotations.txt file that comes from the step
  * 05-CREATE_BED_FILE in the workflow to define camouflaged regions.
  */
-params.camo_annotations = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_03_21-10.52.02/05-CREATE_BED_FILE/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.camo_annotations.txt"
+params.camo_annotations = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_05_17-11.58.12/05-CREATE_BED_FILE/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.camo_annotations.txt"
 
 /*
  * Define the number of samples to run in a single rescue batch. This can
@@ -203,6 +209,8 @@ params.Report_Rmd = file("${projectDir}/bin/SampleGenomeStats.Rmd")
 
 
 
+params.ref_based_artifact_bed = file('/scratch/mlpa241/41/748c8a52ae87f925b06d12fee51b09/reference_based_artifacts.illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.bed')
+
 
 log.info """\
  RESCUE CAMO VARIANTS PIPELINE
@@ -225,6 +233,7 @@ log.info """\
  Genes_of_interest                 : ${params.genes_of_interest}
  Report_Rmd_Path                   : ${params.Report_Rmd}
  DRF_jar                           : ${params.DRF_jar}
+ reference based artifacts         : ${params.ref_based_artifact_bed}
  """
 
 /*
@@ -234,21 +243,21 @@ include {RUN_DRF_WF} from './modules/01-RUN_DRF.nf'
 include {CALCULATE_BAM_STATS_WF} from './modules/02-CALCULATE_BAM_STATS.nf'
 include {RESCUE_CAMO_VARS_WF} from './modules/03-RESCUE_CAMO_VARS_PROCS.nf'
 include {GENERATE_REPORTS_WF} from './modules/03-GENERATE_REPORTS.nf'
+include {VARIANT_FILTERING_WF} from './modules/04-VARIANT_FILTERING.nf'
 
 
 workflow{
 
     RUN_DRF_WF()
 
-    //println RUN_DRF_WF.out
     CALCULATE_BAM_STATS_WF( RUN_DRF_WF.out ) 
 
-    //println CALCULATE_BAM_STATS_WF.out
 
     GENERATE_REPORTS_WF( CALCULATE_BAM_STATS_WF.out.collect()  )
 
 
-    // RESCUE_CAMO_VARS_WF()
+    RESCUE_CAMO_VARS_WF()
+    VARIANT_FILTERING_WF(RESCUE_CAMO_VARS_WF.out)
 
 
 }
