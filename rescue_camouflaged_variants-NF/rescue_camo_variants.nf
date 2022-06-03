@@ -147,8 +147,7 @@ params.n_samples_per_batch = 50
  * It must be either an absolute path or a relative path that includes a preceing './' or the global
  * variable "${projectDir}" (e.g., '${projectDir}/').
  */
-params.results_dir = "./results/${params.masked_ref_tag}_${params.sample_input_tag}-${time_stamp}"
-
+params.results_dir = "${projectDir}/results/${params.masked_ref_tag}_${params.sample_input_tag}-${time_stamp}" 
 /*
  * Define which gene region elements to rescue variants for. Possible options
  * include "all" or "CDS", where "all" will rescue variants in any gene body
@@ -234,19 +233,19 @@ log.info """\
 include {RUN_DRF_WF} from './modules/01-RUN_DRF.nf'
 include {CALCULATE_BAM_STATS_WF} from './modules/02-CALCULATE_BAM_STATS.nf'
 include {RESCUE_CAMO_VARS_WF} from './modules/03-RESCUE_CAMO_VARS_PROCS.nf'
-include {GENERATE_REPORTS_WF} from './modules/04-GENERATE_REPORTS.nf'
+include {GENERATE_REPORTS_WF} from './modules/03-GENERATE_REPORTS.nf'
 
 
 workflow{
 
     RUN_DRF_WF()
 
-    println RUN_DRF_WF.out
+    //println RUN_DRF_WF.out
     CALCULATE_BAM_STATS_WF( RUN_DRF_WF.out ) 
 
-    println CALCULATE_BAM_STATS_WF.out
+    //println CALCULATE_BAM_STATS_WF.out
 
-    GENERATE_REPORTS_WF( CALCULATE_BAM_STATS_WF.out  )
+    GENERATE_REPORTS_WF( CALCULATE_BAM_STATS_WF.out.collect()  )
 
 
     // RESCUE_CAMO_VARS_WF()
