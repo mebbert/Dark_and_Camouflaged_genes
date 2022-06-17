@@ -30,8 +30,7 @@ workflow RESCUE_CAMO_VARS_WF {
         /*
          * Prep batch files for RESCUE_CAMO_VARS_PROC
          */
-        PREP_BATCH_FILES_PROC( input_files_ch.collect(), input_files_index_ch.collect() )
-//        PREP_BATCH_FILES_PROC( "${params.input_sample_path}" )
+	PREP_BATCH_FILES_PROC()
 
         /*
          * Rescue camo vars
@@ -72,8 +71,9 @@ workflow RESCUE_CAMO_VARS_WF {
         //COMBINE_AND_GENOTYPE_PROC.out.combined_vcfs.unique().groupTuple().view()
 
     emit:
+        //TODO make the file_name_pattern work for chr# or just #
         COMBINE_AND_GENOTYPE_PROC.out.combined_vcfs.unique().groupTuple(sort:{ a,b -> 
-            file_name_pattern = ~/full_cohort\.combined\.chr([\dXY]*)_(\d*)-(\d*)\.ploidy_(\d*)\.vcf/
+            file_name_pattern = ~/full_cohort\.combined\.([\dXY]*)_(\d*)-(\d*)\.ploidy_(\d*)\.vcf/
             def (_A, chrA, startA, endA, ploidyA) = (a =~ file_name_pattern)[0]
             def (_B, chrB, startB, endB, ploidyB) = (b =~ file_name_pattern)[0]
             chrA = chrA?.isInteger() ? chrA as Integer : chrA
@@ -121,10 +121,6 @@ process PREP_BATCH_FILES_PROC {
 
 	label 'local'
 
-    input:
-        path( input_files )
-        path( input_files_index )
-
 	output:
 		path('bam_set_*', emit: bam_sets)
 
@@ -141,9 +137,9 @@ process PREP_BATCH_FILES_PROC {
     # to file. Then split file into sets of "${params.n_samples_per_batch}" so we can
     # process sets of "${params.n_samples_per_batch}" .bam files per job submission.
 
-	for bam in *.{cram,bam}
+	for bam in ${params.input_sample_path}/**.{cram,bam}
 	do
-		echo \$PWD/\$bam
+		echo \$bam
 	done > bam_list.txt
 
     # Split bam_list.txt into sets of 50 bam files with prefix 'bam_set_'
@@ -189,9 +185,9 @@ process RESCUE_CAMO_VARS_PROC {
         /*
          * Emit the full path to all .gvcf files
          */
- 		// path 'camo_batch_gvcfs/', emit: camo_gvcfs
  		path 'camo_batch_gvcfs/**/*.g.vcf', emit: camo_gvcfs
-        // val 'complete', emit: rescue_complete
+                path '*.sam', emit: realigned_sams
+                path '*.ploidy_*.bam', emit: sorted_realigned_bams
 
 	script:
 
@@ -203,13 +199,14 @@ process RESCUE_CAMO_VARS_PROC {
 	"""
 		bash rescue_camo_variants.sh \\
             "${params.masked_ref_fasta}" \\
-            "${params.unmasked_ref_fasta}" \\
+            "${params.current_ref_fasta}" \\
             "${params.extraction_bed}" \\
             "${params.gatk_bed}" \\
             "${bam_set}" \\
             "${params.max_repeats_to_rescue}" \\
             "${params.clean_tmp_files}" \\
-            "${task.cpus}"
+            "${task.cpus}" \\
+            "${params.ploidy_to_use}"
 	"""
 }
 
@@ -245,7 +242,6 @@ process COMBINE_AND_GENOTYPE_PROC {
     output:
         tuple val(ploidy_group), path("full_cohort.combined.${region}.${ploidy_group}.g.vcf"), emit: combined_gvcfs
         tuple val(ploidy_group), path("full_cohort.combined.${region}.${ploidy_group}.vcf"), emit: combined_vcfs
-        //tuple val(ploidy_group), val(region_string), path("full_cohort.combined.${region}.g.vcf")
 
     script:
 

@@ -15,7 +15,6 @@ def main(blat_bed, ref):
     RefDict = SeqIO.index(ref, "fasta")
     blat_bed = open(blat_bed, 'r')
     seen_variants = set()
-    printFile = open('maddyTesting.txt', 'w')
     for line in blat_bed:
         toks = line.strip().split()
         # the region chromosome, start position, end position, and region name TODO check this
@@ -25,12 +24,6 @@ def main(blat_bed, ref):
         query_pos = (query_tok[-2], int(start), int(end), "+") #Query always on forward strand
         target = getSeqFromRef(RefDict, target_pos)
         query = getSeqFromRef(RefDict, query_pos)
-        print(len(target), file=printFile)
-        print(target, file=printFile)
-        print(len(query), file=printFile)
-        print(query, file=printFile)
-        print(toks, file=printFile)
-        print('\n', file=printFile)
         #aligner = Align.PairwiseAligner()
         #aligner.mode = 'local'
         #aligner.match_score = 1
@@ -95,7 +88,6 @@ def main(blat_bed, ref):
 
             break
 
-    printFile.close()
                                     
 
 if __name__ == "__main__":

@@ -25,7 +25,7 @@ def time_stamp = sdf.format(date)
  * not been masked for camouflaged regions, rescuing camouflaged variants will
  * not work.
  */
-params.masked_ref_fasta = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_04_08-17.34.55/06-MASK_GENOME/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.fa"
+params.masked_ref_fasta = "/mnt/gpfs3_amd/condo/mteb223/mlpa241/Dark_and_Camouflaged_genes/identify_dark_and_camouflaged_regions-NF/results/Ensembl_hg38_release_105_Original_10_ADSP_samples-2022_06_05/06-MASK_GENOME/illuminaRL100.Ensembl_hg38_release_105.fa"
 
 
 /*
@@ -35,14 +35,14 @@ params.masked_ref_fasta = "${projectDir}/../identify_dark_and_camouflaged_region
  * 'reference-based artifacts', which we describe in the paper and in notes
  * for the respective NextFlow process.
  */
-params.unmasked_ref_fasta = "${projectDir}/../references/1KGenomes_hg38-2015/GRCh38_full_analysis_set_plus_decoy_hla.fa"
+params.unmasked_ref_fasta = "/project/mteb223_uksr/sequencing_resources/references/Ensembl/hg38_release_105/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
 
 /*
  * A 'tag' to describe the reference genome. This is used for naming output
  * in the NextFlow process that identifies false positives (a.k.a.
  * reference-based artifacts).
  */
-params.masked_ref_tag = 'illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla'
+params.masked_ref_tag = 'Ensembl_hg38_release_105_Original_10_ADSP_samples'
 
 
 /*
@@ -61,7 +61,7 @@ params.masked_ref_tag = 'illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_
  * must have coordinates specific to the reference genome being used in the
  * 'masked_ref_fasta' and the `unmasked_ref_fasta` arguments.
  */
-params.mask_bed = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_04_08-17.34.55/05-CREATE_BED_FILE/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.camo.mask_bed.sorted.bed"
+params.mask_bed = "/mnt/gpfs3_amd/condo/mteb223/mlpa241/Dark_and_Camouflaged_genes/identify_dark_and_camouflaged_regions-NF/results/Ensembl_hg38_release_105_Original_10_ADSP_samples-2022_06_05/05-CREATE_BED_FILE/illuminaRL100.Ensembl_hg38_release_105.camo.mask_bed.sorted.bed"
 
 /*
  * Path to the .bed file that GATK will use to call variants. This MUST
@@ -86,7 +86,7 @@ params.mask_bed = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/res
  * This is the *.camo_annotations.txt file that comes from the step
  * 05-CREATE_BED_FILE in the workflow to define camouflaged regions.
  */
-params.camo_annotations = "${projectDir}/../identify_dark_and_camouflaged_regions-NF/results/1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla_illuminaRL100_Original_ADSP_samples-2022_04_08-17.34.55/05-CREATE_BED_FILE/illuminaRL100.1KGenomes_hg38_2015-GRCh38_full_analysis_set_plus_decoy_hla.camo_annotations.txt"
+params.camo_annotations = "/mnt/gpfs3_amd/condo/mteb223/mlpa241/Dark_and_Camouflaged_genes/identify_dark_and_camouflaged_regions-NF/results/Ensembl_hg38_release_105_Original_10_ADSP_samples-2022_06_05/05-CREATE_BED_FILE/illuminaRL100.Ensembl_hg38_release_105.camo_annotations.txt"
 
 
 /*
@@ -112,7 +112,7 @@ params.rescue_gene_elements = "all"
 
 
 log.info """\
- RESCUE CAMO VARIANTS PIPELINE
+ IDENTIFY FALSE POSITIVES PIPELINE
  ==========================================
  unmasked reference                : ${params.unmasked_ref_fasta}
  masked reference                  : ${params.masked_ref_fasta}
@@ -125,12 +125,12 @@ log.info """\
 /*
  * Import Modules
  */
-include {IDENTIFY_FALSE_POSITIVES_PROC} from './modules/01-IDENTIFY_FALSE_POSITIVES.nf'
+include {IDENTIFY_FALSE_POSITIVES_WF} from './modules/01-IDENTIFY_FALSE_POSITIVES.nf'
 
 
 workflow{
 
-    IDENTIFY_FALSE_POSITIVES_PROC()
+    IDENTIFY_FALSE_POSITIVES_WF()
 
 }
 

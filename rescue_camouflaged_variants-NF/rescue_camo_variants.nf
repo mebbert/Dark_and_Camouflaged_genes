@@ -173,6 +173,13 @@ params.rescue_gene_elements = "all"
  */
 params.max_repeats_to_rescue = 5
 
+
+/*
+ * The hardcoded ploidy to use
+ * 
+ */
+params.ploidy_to_use = 10
+
 /*
  * Parameter defining whether to clean tmp files throughout the run. Depending
  * on how many samples are being run, this can generate tens-of-thousands of files,
@@ -229,6 +236,7 @@ log.info """\
  n samples per batch               : ${params.n_samples_per_batch}
  results dir                       : ${params.results_dir}
  max repeats to rescue             : ${params.max_repeats_to_rescue}
+ hardcoded ploidy                  : ${params.ploidy_to_use}
  clean tmp files?                  : ${params.clean_tmp_files}
  DRF_interval_length               : ${params.DRF_interval_length}
  Genes_of_interest                 : ${params.genes_of_interest}

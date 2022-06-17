@@ -4,5 +4,9 @@ work
 identify_dark_and_camouflaged_regions-NF/work
 rescue_camouflaged_variants-NF/work
 identify_dark_and_camouflaged_regions-NF/results
+identify_dark_and_camouflaged_regions-NF/1K*
+identify_dark_and_camouflaged_regions-NF/T2T*
+T2T*
 rescue_camouflaged_variants-NF/results
-
+Ensembl*
+identify_false_positives-NF/trace*

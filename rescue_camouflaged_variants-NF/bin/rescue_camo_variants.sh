@@ -8,8 +8,8 @@ echo "Job running on: `hostname`"
 # The masked ref fasta
 ref=$1
 
-# the unmasked ref fasta to be used for bamtofastq for crams
-unmasked_ref=$2
+# the current ref fasta to be used for bamtofastq for crams
+current_ref=$2
 
 # The bed file to use for extracting reads from each sample
 extraction_bed=$3		
@@ -50,6 +50,8 @@ done
 sample_regex="SM:([A-Za-z0-9_\-]+)"
 
 threads=$8
+
+hardcoded_ploidy=$9
 
 # Create GATK environment variable for convenience.
 GATK="gatk --java-options -Xmx20G "
@@ -139,13 +141,13 @@ do
 		fq2=${sampleName}_R2.fastq
 
 		# TODO: Handle bam & cram!
-		export CRAM_REFERENCE=$unmasked_ref
+		export CRAM_REFERENCE=$current_ref
 		time bedtools bamtofastq -i $tmp_bam -fq $fq1 -fq2 $fq2 2> /dev/null
 
 		##################
 		# Align with BWA #
 		##################
-		aligned_sam=${sampleName}.sam
+		aligned_sam=${sampleName}_ploidy_${ploidy}.sam
 		final_bam=${sampleName}.ploidy_${ploidy}.bam
 		# RG="@RG\tID:group1\tSM:$sampleName\tPL:illumina\tLB:lib1\tPU:unit1"
 
@@ -181,7 +183,7 @@ do
 			-R $ref \
 			-I $final_bam \
 			-L $gatk_bed \
-			--sample-ploidy $ploidy \
+			--sample-ploidy "${hardcoded_ploidy}" \
 			--emit-ref-confidence GVCF \
 			--dont-use-soft-clipped-bases \
 			-O $gvcf

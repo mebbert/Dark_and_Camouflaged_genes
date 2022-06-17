@@ -8,8 +8,7 @@ CAMO_ANNOTATION=$1
 INCLUDE_REGIONS=$2
 MASK_BED=$3
 REF=$4
-OUT_FILE=$5
-NUM_THREADS=$6
+NUM_THREADS=$5
 
 query="./query/mapq_genes.query.fa"
 blat_result="./blat_result/blat.results.psl"
@@ -120,15 +119,3 @@ if ! score_blat_output.awk \
 	exit 1
 fi
 
-echo "`date` extracting false positives"
-# create a bed file of positions of the reference base artifacts that need to be filtered from the VCF files
-if ! extract_false_positives.py \
-	$blat_bed \
-	$REF | \
-	bedtools sort -i - -g ${REF}.fai \
-	> $false_positives; then
-	echo "`date` extract_false_positives.py failed for $blat_bed"
-	exit 1
-fi
-
-cp $false_positives $OUT_FILE
