@@ -140,6 +140,14 @@ do
 		fq1=${sampleName}_R1.fastq
 		fq2=${sampleName}_R2.fastq
 
+		# TODO: still need to check if these work and will fix our problem
+		#if [[ "$(head -1 $fq1)" =~ ^@\\1.* ]]; then
+		#	sed -i 1,4d $fq1
+		#fi
+		#if [[ "$(head -1 $fq2)" =~ ^@\\2.* ]]; then
+		#	sed -i 1,4d $fq2
+		#fi
+
 		# TODO: Handle bam & cram!
 		export CRAM_REFERENCE=$current_ref
 		time bedtools bamtofastq -i $tmp_bam -fq $fq1 -fq2 $fq2 2> /dev/null

@@ -70,6 +70,7 @@ def main():
             current_gene = gene_ID
             gene = (chrom, gene_start, gene_end, gene_type, gene_score, gene_strand, gene_ID, gene_name, biotype)
             #print("printing gene")
+            #print(gene)
             printLine(gene)
             previous_region = None
             gene_beginning = True
@@ -123,11 +124,11 @@ def main():
                 intron_ID = gene_ID + "_intron_%d" % intron_count[gene_ID]
                 intron_Name = gene_name + "_intron_%d" % intron_count[gene_ID]
                 intron = (chrom, intron_start, intron_end, "intron", region_score, region_strand, intron_ID, intron_Name, biotype)
-               # print("printing intron")
+                #print("printing intron")
                 printLine(intron)
 
             previous_region = region
-#    print("previous region")
+    #print("previous region")
     printLine(previous_region)
 
 if __name__ == "__main__":

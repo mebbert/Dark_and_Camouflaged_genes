@@ -63,11 +63,10 @@ workflow RESCUE_CAMO_VARS_WF {
                  def masked_ref_fasta = file( params.masked_ref_fasta )
                  tuple( repeat, dirname, masked_ref_fasta, gvcf_files )
              }
-             //.view()
              .combine( regions, by: 0 )
              .map { repeat, dirname, masked_ref_fasta, gvcf_files, region ->
                  tuple( dirname, region, masked_ref_fasta, gvcf_files )
-             }| COMBINE_AND_GENOTYPE_PROC
+             } | COMBINE_AND_GENOTYPE_PROC
         //COMBINE_AND_GENOTYPE_PROC.out.combined_vcfs.unique().groupTuple().view()
 
     emit:
