@@ -54,7 +54,7 @@ threads=$8
 hardcoded_ploidy=$9
 
 # Create GATK environment variable for convenience.
-GATK="gatk --java-options -Xmx20G "
+GATK="gatk --java-options -Xmx50G "
 
 # Track first and last sample to provide unique name to final output .gvcf for this
 # batch. Cannot use JobID because we don't know which scheduler (if any) will be
@@ -137,20 +137,20 @@ do
 		####################
 
 		# Define tmp fastq files
-		fq1=${sampleName}_R1.fastq
-		fq2=${sampleName}_R2.fastq
-
-		# TODO: still need to check if these work and will fix our problem
-		#if [[ "$(head -1 $fq1)" =~ ^@\\1.* ]]; then
-		#	sed -i 1,4d $fq1
-		#fi
-		#if [[ "$(head -1 $fq2)" =~ ^@\\2.* ]]; then
-		#	sed -i 1,4d $fq2
-		#fi
+		fq1=${sampleName}_repeat_num_${repeat_num}_R1.fastq
+		fq2=${sampleName}_repeat_num_${repeat_num}_R2.fastq
 
 		# TODO: Handle bam & cram!
 		export CRAM_REFERENCE=$current_ref
 		time bedtools bamtofastq -i $tmp_bam -fq $fq1 -fq2 $fq2 2> /dev/null
+
+
+		if [[ "$(head -1 $fq1)" =~ ^\@\/1.* ]]; then
+			sed -i 1,4d $fq1
+		fi
+		if [[ "$(head -1 $fq2)" =~ ^\@\/2.* ]]; then
+			sed -i 1,4d $fq2
+		fi
 
 		##################
 		# Align with BWA #
@@ -179,7 +179,8 @@ do
 
 		# I don't see how we can perform base recalibrator since
 		# these regions have never been characterized.
-		gvcf=${sampleName}.ploidy_${ploidy}.g.vcf
+		gvcf=camo_gvcfs/ploidy_${ploidy}/${sampleName}.ploidy_${ploidy}.g.vcf
+		mkdir -p camo_gvcfs/ploidy_${ploidy}/
 		echo $gvcf >> ${gvcf_list[$repeat_num]}
 		
 		# For clarity, we previously explicitly invoked '--genotyping-mode DISCOVERY' (GATK v3.X)
@@ -208,36 +209,36 @@ done < $bam_list
 #####################################
 # Combine gVCFs for each ploidy set #
 #####################################
-for repeat_num in $(seq $min_repeat 1 $max_repeat)
-do
+#for repeat_num in $(seq $min_repeat 1 $max_repeat)
+#do
 
-	# If this gvcf_list does not exist, skip
-	if [ ! -f "${gvcf_list[$repeat_num]}" ]; then
-		continue
-	fi
+#	# If this gvcf_list does not exist, skip
+#	if [ ! -f "${gvcf_list[$repeat_num]}" ]; then
+#		continue
+#	fi
+#
+#	ploidy=$(( 2 * $repeat_num ))
+#	comb_gvcf_file=camo_batch_gvcfs/ploidy_${ploidy}/samples_${first_sample}_through_${last_sample}.g.vcf
 
-	ploidy=$(( 2 * $repeat_num ))
-	comb_gvcf_file=camo_batch_gvcfs/ploidy_${ploidy}/samples_${first_sample}_through_${last_sample}.g.vcf
+#	# Create a results directory for this ploidy since we know
+#	# there will be results for it.
+#	mkdir -p camo_batch_gvcfs/ploidy_${ploidy}/
 
-	# Create a results directory for this ploidy since we know
-	# there will be results for it.
-	mkdir -p camo_batch_gvcfs/ploidy_${ploidy}/
+#	time $GATK CombineGVCFs \
+#		-R $ref \
+#		-O $comb_gvcf_file \
+#		--variant ${gvcf_list[$repeat_num]}
 
-	time $GATK CombineGVCFs \
-		-R $ref \
-		-O $comb_gvcf_file \
-		--variant ${gvcf_list[$repeat_num]}
+#	# Index the gvcf so that it can be accessed 'randomly'
+#	# by CombineGVCFs
+#	time $GATK IndexFeatureFile \
+#		-I $comb_gvcf_file
 
-	# Index the gvcf so that it can be accessed 'randomly'
-	# by CombineGVCFs
-	time $GATK IndexFeatureFile \
-		-I $comb_gvcf_file
-
-done
+#done
 
 # Cleaning up because this pipeline may create thousands of files, depending 
 # on how large the data set is.
-if [ "$clean_tmp_files" = true ] ; then
-	rm *.vcf*
-fi
+#if [ "$clean_tmp_files" = true ] ; then
+#	rm *.vcf*
+#fi
 echo "COMMAND(`date`): DONE."

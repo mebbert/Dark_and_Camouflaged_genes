@@ -67,7 +67,7 @@ workflow RESCUE_CAMO_VARS_WF {
              .map { repeat, dirname, masked_ref_fasta, gvcf_files, region ->
                  tuple( dirname, region, masked_ref_fasta, gvcf_files )
              } | COMBINE_AND_GENOTYPE_PROC
-        //COMBINE_AND_GENOTYPE_PROC.out.combined_vcfs.unique().groupTuple().view()
+        COMBINE_AND_GENOTYPE_PROC.out.combined_vcfs.unique().groupTuple().view()
 
     emit:
         //TODO make the file_name_pattern work for chr# or just #
@@ -184,7 +184,8 @@ process RESCUE_CAMO_VARS_PROC {
         /*
          * Emit the full path to all .gvcf files
          */
- 		path 'camo_batch_gvcfs/**/*.g.vcf', emit: camo_gvcfs
+ 		//path 'camo_batch_gvcfs/**/*.g.vcf', emit: camo_gvcfs
+ 		path 'camo_gvcfs/**/*.g.vcf', emit: camo_gvcfs
                 path '*.sam', emit: realigned_sams
                 path '*.ploidy_*.bam', emit: sorted_realigned_bams
 
@@ -239,7 +240,7 @@ process COMBINE_AND_GENOTYPE_PROC {
 
 
     output:
-        tuple val(ploidy_group), path("full_cohort.combined.${region}.${ploidy_group}.g.vcf"), emit: combined_gvcfs
+        tuple val(ploidy_group), path("genomicsDBImport_${ploidy_group}_${region}"), emit: genomics_db
         tuple val(ploidy_group), path("full_cohort.combined.${region}.${ploidy_group}.vcf"), emit: combined_vcfs
 
     script:
@@ -248,7 +249,7 @@ process COMBINE_AND_GENOTYPE_PROC {
 
     def avail_mem = task.memory ? task.memory.toGiga() : 0
 
-    def Xmx = avail_mem >= 8 ? "-Xmx${avail_mem - 1}G" : ''
+    def Xmx = avail_mem >= 8 ? "-Xmx${avail_mem - 3}G" : ''
     def Xms = avail_mem >= 8 ? "-Xms${avail_mem.intdiv(2)}G" : ''
 
     """
@@ -256,30 +257,35 @@ process COMBINE_AND_GENOTYPE_PROC {
     echo "Region: ${region_string}"
     echo "Ref: ${masked_ref_fasta}"
 
-    cat << __EOF__ > "${ploidy_group}.gvcf.list"
-    ${gvcf_files.join('\n'+' '*4)}
-    __EOF__
+#    cat << __EOF__ > "${ploidy_group}.gvcf.list"
+    echo "-V ${gvcf_files.join('\n-V ')}" > "${ploidy_group}.gvcf.list"
+#    __EOF__
+#    cat "${ploidy_group}.gvcf.list"
 
     combined_region_gvcf="full_cohort.combined.${region}.${ploidy_group}.g.vcf"
     final_region_vcf="full_cohort.combined.${region}.${ploidy_group}.vcf"
     input_gvcf_list="${ploidy_group}.gvcf.list"
 
-    gatk \\
-        --java-options "${Xmx} ${Xms} -XX:+UseSerialGC" \\
-        CombineGVCFs \\
-        -R "${masked_ref_fasta}" \\
-        -L "${region_string}" \\
-        -O "\${combined_region_gvcf}" \\
-        -V "\${input_gvcf_list}"
+    rm -rf genomicsDBImport_${ploidy_group}_${region}
 
     gatk \\
-        --java-options "${Xmx} ${Xms} -XX:+UseSerialGC" \\
+	--java-options "${Xmx} ${Xms} -XX:+UseSerialGC" \\
+        GenomicsDBImport \\
+	--genomicsdb-workspace-path genomicsDBImport_${ploidy_group}_${region} \\
+        -R "${masked_ref_fasta}" \\
+        -L "${region_string}" \\
+        --arguments_file "\${input_gvcf_list}"
+
+    #chmod -R 777 genomicsDBImport_${ploidy_group}_${region}
+
+    gatk \\
+	--java-options "${Xmx} ${Xms} -XX:+UseSerialGC -DGATK_STACKTRACE_ON_USER_EXCEPTION=true" \\
         GenotypeGVCFs \\
         -R "${masked_ref_fasta}" \\
         -L "${region_string}" \\
         -A GenotypeSummaries \\
         -O "\${final_region_vcf}" \\
-        -V "\${combined_region_gvcf}"
+        -V gendb://genomicsDBImport_${ploidy_group}_${region} \\
     """
 }
 
