@@ -117,9 +117,9 @@ def main():
             printLine(previous_region)
 
             #check to see if there are gaps between exons (if there are fill with intron)
-            if region[1] - previous_region[2] - 1 > 0:
-                intron_start = previous_region[2] + 1
-                intron_end = region[1] - 1
+            if region[1] - previous_region[2] > 0:
+                intron_start = previous_region[2]
+                intron_end = region[1]
                 intron_count[gene_ID] += 1
                 intron_ID = gene_ID + "_intron_%d" % intron_count[gene_ID]
                 intron_Name = gene_name + "_intron_%d" % intron_count[gene_ID]
