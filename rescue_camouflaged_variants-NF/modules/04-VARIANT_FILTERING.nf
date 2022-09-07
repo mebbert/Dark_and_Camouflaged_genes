@@ -40,18 +40,25 @@ process CAT_VARIANTS_PROC {
 		path("*${ploidy}.vcf", emit: ploidy_vcf)
 
 	script:
+	def inputMap = [:]
+	for(gvcf in gvcfs) {
+	    groups = gvcf =~ /full_cohort\.combined\.(\w*)_\d*-\d*.ploidy_\d*\.vcf/
+	    chrom = groups[0][1]
+	    inputMap[chrom] = (inputMap[chrom] == null) ? "I=$gvcf" : inputMap[chrom] + " I=$gvcf"
+	}
+	inputFiles = ""
+	chromOrder = ["1", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "2", "20", "21", "22", "3", "4", "5", "6", "7", "8", "9", "X", "Y"]
+	for(chrom in chromOrder) {
+	    inputFiles = (inputMap[chrom] == null) ? inputFiles : "$inputFiles " + inputMap[chrom]
+	}
+
 	"""
-            inputFiles=""
-            for gvcf in ${gvcfs}
-            do
-                echo \${gvcf}
-                inputFiles="\${inputFiles} I=\${gvcf}"
-            done
-            echo \$inputFiles
+	    echo $inputMap
+	    echo $inputFiles
             out="full_cohort.ADSP.camo_genes.genotyped.hg38.${ploidy}.vcf"
             gatk GatherVcfs\
                 O=\$out \
-                \$inputFiles \
+                ${inputFiles} \
                 R=${params.unmasked_ref_fasta}
             echo "Completed gatherVCFs"
 
