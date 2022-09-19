@@ -48,7 +48,8 @@ workflow RESCUE_CAMO_VARS_WF {
             | splitCsv(sep: '\t')
             | map { line ->
                 // println "Line: ${line}"
-                tuple( line[4].toInteger(), "${line[0]}:${line[1]}-${line[2]}" )
+		endMinOne = line[2].toInteger() - 1
+                tuple( line[4].toInteger(), "${line[0]}:${line[1]}-${endMinOne}" )
             }
             | set { regions }
 
