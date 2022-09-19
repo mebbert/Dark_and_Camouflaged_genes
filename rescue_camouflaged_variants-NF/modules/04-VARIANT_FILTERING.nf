@@ -18,6 +18,9 @@ workflow VARIANT_FILTERING_WF {
         GET_VARIANT_METRICS_PROC(COMBINE_PLOIDY_PROC.out.combined_vcf)
         GET_GENE_NUM_PROC(GET_VARIANT_METRICS_PROC.out.variant_metrics)
 
+    emit:
+	GET_GENE_NUM_PROC.out
+
 }
 
 
@@ -31,7 +34,7 @@ process CAT_VARIANTS_PROC {
      */
     publishDir("${params.results_dir}/04-VARIANT_FILTERING/01-CAT_VARIANTS", mode: 'copy')
 
-	label 'local'
+	label 'CAT_VARIANTS'
 
     input:
         tuple val(ploidy), path(gvcfs)
@@ -72,7 +75,7 @@ process COMBINE_PLOIDY_PROC {
      */
     publishDir("${params.results_dir}/04-VARIANT_FILTERING/01-CAT_VARIANTS", mode: 'copy')
 
-        label 'local'
+        label 'COMBINE_PLOIDY'
 
     input:
         val(ploidy_vcfs)
@@ -81,11 +84,19 @@ process COMBINE_PLOIDY_PROC {
                 path('*combined.vcf', emit: combined_vcf)
 
         script:
+        def avail_mem = task.memory ? task.memory.toGiga() : 0
+
+        def Xmx = avail_mem >= 8 ? "-Xmx${avail_mem - 3}G" : ''
+        def Xms = avail_mem >= 8 ? "-Xms${avail_mem.intdiv(2)}G" : ''
+	def xxFlaf = avail_mem >= 8 ? "-XX:+UseSerialGC" : ''
+
         """
         input_string="${ploidy_vcfs.join(' I=')}"
         input_string="I= \${input_string}"
+	echo ${Xmx}
+	echo ${Xms}
 
-        java -jar \$PICARD SortVcf\
+        java "${Xmx}" "${Xms}" "${xxFlag}" -jar \$PICARD SortVcf\
             \${input_string} \
             O=full_cohort.ADSP_WES.camo_genes.genotyped.hg38.combined.vcf
 
@@ -100,7 +111,7 @@ process GET_VARIANT_METRICS_PROC {
      */
     publishDir("${params.results_dir}/04-VARIANT_FILTERING/02-GET_VARIANT_METRICS", mode: 'copy')
 
-        label 'local'
+        label 'GET_VAR_METRICS'
 
     input:
         path(combined_vcf)
@@ -130,7 +141,7 @@ process GET_GENE_NUM_PROC {
      */
     publishDir("${params.results_dir}/04-VARIANT_FILTERING/03-GET_GENE_NUM", mode: 'copy')
 
-        label 'local'
+        label 'GET_GENE_NUM'
 
     input:
         path(variant_metrics)
