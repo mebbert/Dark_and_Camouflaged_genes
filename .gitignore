@@ -8,5 +8,10 @@ identify_dark_and_camouflaged_regions-NF/1K*
 identify_dark_and_camouflaged_regions-NF/T2T*
 T2T*
 rescue_camouflaged_variants-NF/results
-Ensembl*
 identify_false_positives-NF/trace*
+
+# ignoring run files that contain full paths
+identify_dark_and_camouflaged_regions-NF/run_1KGenomes_hg38_plus_decoy/run_workflow-prepare_1KGenomes_hg38_plus_decoy.sh
+identify_dark_and_camouflaged_regions-NF/run_Ensembl_hg37_release_87/run_workflow-prepare_Ensembl_hg37_release_87.sh
+identify_dark_and_camouflaged_regions-NF/run_Ensembl_hg38_release_107/run_workflow-prepare_Ensembl_hg38_release_107.sh
+
