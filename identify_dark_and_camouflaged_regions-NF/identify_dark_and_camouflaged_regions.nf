@@ -155,6 +155,17 @@ params.DRF_interval_length = 5_000_000
  */
 params.DRF_jar = file("${projectDir}/bin/DarkRegionFinder.jar")
 
+/*
+ * Boolean flag for whether the samples are long read (True) or short read (False).
+ * Default is False for short reads
+ */
+params.isLongRead = false
+
+params.isONT = false
+
+params.isPacBio = false
+
+
 
 
 log.info """\
@@ -172,6 +183,9 @@ log.info """\
  mask_ref_prefix                : ${params.mask_ref_prefix}
  DRF_interval_length            : ${params.DRF_interval_length}
  DRF_jar                        : ${params.DRF_jar}
+ isLongRead                     : ${params.isLongRead}
+ isONT                          : ${params.isONT}
+ isPacBio                       : ${params.isPacBio}
  """
 
 

@@ -30,7 +30,7 @@ low_cov_bed="/dev/null" # Nothing output to low_cov_bed since min_depth = -1
 low_mapq_bed="${sample_dir}/${sample_name}.min_depth_${min_depth}.min_mapq_mass_${min_mapq_mass}.mapq_thresh_${mapq_thresh}.dark.low_mapq.bed"
 inc_bed="/dev/null" # No need to store incomplete bases for each sample
 
-if ! java -Xmx32G -jar $DRF_jar \
+if ! java -Xmx100G -jar $DRF_jar \
 		-i "${sample_input_file}" \
 		--human-ref "${align_to_ref}" \
 		--min-region-size 1 \

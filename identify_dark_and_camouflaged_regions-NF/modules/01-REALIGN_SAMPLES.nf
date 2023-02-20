@@ -68,34 +68,71 @@ workflow REALIGN_SAMPLES_WF {
      * To 'fix' it, reduce params.reads_per_run to a number less than the number
      * of paired-end reads
      */
-    sample_input_files
-        | lsamtools_collate_and_fastq_proc
-        | split_fastq_proc
-        | map { sample_name, fastq_files ->
-            tuple( groupKey(sample_name, fastq_files.size()), fastq_files )
-        }
-        | transpose()
-        | combine( lsamtools_view_header_proc.out, by: 0 )
-        | set { realignment_inputs_ch }
+    /*
+    *sample_input_files
+    *    | lsamtools_collate_and_fastq_proc
+    *    | split_fastq_proc
+    *    | map { sample_name, fastq_files ->
+    *        tuple( groupKey(sample_name, fastq_files.size()), fastq_files )
+    *    }
+    *    | transpose()
+    *    | combine( lsamtools_view_header_proc.out, by: 0 )
+    *    | set { realignment_inputs_ch }
+    */
+
+    if("${params.isLongRead}" == false){
+        sample_input_files
+            | lsamtools_collate_and_fastq_proc
+            | split_fastq_proc
+            | map { sample_name, fastq_files ->
+                tuple( groupKey(sample_name, fastq_files.size()), fastq_files )
+            }
+            | transpose()
+            | combine( lsamtools_view_header_proc.out, by: 0 )
+            | set { realignment_inputs_ch }
+
+	     /*
+	      * Steps will do as follows for re-alignment:
+	      *   1. bwa_mem_proc: Re-align the mini .fastq files using BWA MEM
+	      *   2. lsamtools_csort_proc: sort the individual mini .(b|cr)am files
+	      *      generated from BWA MEM
+	      *   3. groupTuple: group mini .(b|cr)am files by sample name
+	      *   4. map: creates tuples of sample_name and the mini .(b|cr)am files
+	      *   5. lsamtools_merge_proc: merge all of the mini .(b|cr)am files
+	      */
+	     bwa_mem_proc( realignment_inputs_ch )
+		 | lsamtools_csort_proc
+		 | groupTuple()
+		 | map { sample_name, bam_files ->
+		     tuple( sample_name.toString(), bam_files )
+		 }
+		 | lsamtools_merge_proc
+		 // | view()
 
 
-     /*
-      * Steps will do as follows for re-alignment:
-      *   1. bwa_mem_proc: Re-align the mini .fastq files using BWA MEM
-      *   2. lsamtools_csort_proc: sort the individual mini .(b|cr)am files
-      *      generated from BWA MEM
-      *   3. groupTuple: group mini .(b|cr)am files by sample name
-      *   4. map: creates tuples of sample_name and the mini .(b|cr)am files
-      *   5. lsamtools_merge_proc: merge all of the mini .(b|cr)am files
-      */
-     bwa_mem_proc( realignment_inputs_ch )
-         | lsamtools_csort_proc
-         | groupTuple()
-         | map { sample_name, bam_files ->
-             tuple( sample_name.toString(), bam_files )
-         }
-         | lsamtools_merge_proc
-         // | view()
+
+    } else {
+         sample_input_files
+            | lsamtools_fastq_proc
+            | split_fastq_proc
+            | map { sample_name, fastq_files ->
+                tuple( groupKey(sample_name, fastq_files.size()), fastq_files )
+            }
+            | transpose()
+            | combine( lsamtools_view_header_proc.out, by: 0 )
+            | set { realignment_inputs_ch }
+
+	
+	minimap2_proc( realignment_inputs_ch )
+		| lsamtools_csort_proc
+		| groupTuple()
+		| map{ sample_name, bam_files ->
+		     tuple( sample_name.toString(), bam_files )
+		 }
+		 | lsamtools_merge_proc
+		 // | view()
+    }
+
 
     emit:
         lsamtools_merge_proc.out
@@ -152,6 +189,33 @@ process lsamtools_name_sort_proc {
     """
 }
 
+process lsamtools_fastq_proc {
+
+    tag { "${sample_name}" }
+
+    label 'lsamtools_collate_and_fastq_proc'
+
+    input:
+    tuple val(sample_name), path(bam)
+
+    output:
+    tuple val(sample_name), path("${sample_name}.fastq.gz")
+
+    script:
+
+    def additional_threads = task.cpus - 1
+    
+    """
+    lsamtools fastq \\
+        -@ "${additional_threads}" \\
+        -O \\
+        -T RG,BC \\
+        --reference "${params.original_ref}" \\
+        $bam | pigz -c >"${sample_name}.fastq.gz"
+    """
+}
+
+
 process lsamtools_collate_and_fastq_proc {
 
     tag { "${sample_name}" }
@@ -197,7 +261,7 @@ process split_fastq_proc {
     tuple val(sample_name), path(fastq)
 
     output:
-    tuple val(sample_name), path("${sample_name}.interleaved_R1_R2.split_${/[0-9]/*5}.fastq.gz")
+    tuple val(sample_name), path("${sample_name}.split_${/[0-9]/*5}.fastq.gz")
 
     """
     lines_per_read=4
@@ -212,7 +276,7 @@ process split_fastq_proc {
     -d \\
     -l \$n_lines \\
     - \\
-    "${sample_name}.interleaved_R1_R2.split_"
+    "${sample_name}.split_"
     """
 }
 
@@ -275,8 +339,120 @@ process bwa_mem_proc {
         lsamtools view \\
             -C \\
             -T params.align_to_ref \\
-            -o "${fastq.baseName}.unsorted.mini.bam" \\
+            -o "${fastq.baseName}.unsorted.mini.cram" \\
             -
+    fi
+    """
+}
+
+
+process minimap2_proc {
+
+    tag { "${sample_name}:${fastq.name}" }
+
+    label 'minimap2_proc'
+
+    input:
+    tuple val(sample_name), path(fastq), path(header)
+
+    output:
+    tuple val(sample_name), path("${fastq.baseName}.unsorted.mini.bam")
+
+    script:
+    def task_cpus = task.cpus > 1 ? task.cpus - 1 : task.cpus
+
+    print sample_name
+    print fastq
+    """
+   
+    if [ "${params.isONT}" = "true" ]; then
+        if [ "${params.output_format}" = "bam" ]; then
+            minimap2 \\
+                -t "${task_cpus}" \\
+                -a \\
+                -x map-ont \\
+                -Y \\
+                --eqx \\
+                --secondary=no \\
+                -L \\
+                -O 5,56 \\
+                -E 4,1 \\
+                -B 5 \\
+                -z 400,50 \\
+                -r 2k \\
+                "${params.align_to_ref}" \\
+                "${fastq}" |
+            lsamtools view \\
+                -1 \\
+                -O bam \\
+                -o "${fastq.baseName}.unsorted.mini.bam" \\
+                -
+        else
+            minimap2 \\
+                -t "${task_cpus}" \\
+                -a \\
+                -Y \\
+                --eqx \\
+                --secondary=no \\
+                -L \\
+                -O 5,56 \\
+                -E 4,1 \\
+                -B 5 \\
+                -z 400,50 \\
+                -r 2k \\
+                -x map-ont \\
+                "${params.align_to_ref}" \\
+                "${fastq}" |
+            lsamtools view \\
+                -C \\
+                -T "${params.align_to_ref}" \\
+                -o "${fastq.baseName}.unsorted.mini.cram" \\
+                -
+        fi
+    elif [ "${params.isPacBio}" = "true" ]; then
+        if [ "${params.output_format}" = "bam" ]; then
+            minimap2 \\
+                -t "${task_cpus}" \\
+                -a \\
+                -x map-pb \\
+                -Y \\
+                --eqx \\
+                --secondary=no \\
+                -L \\
+                -O 5,56 \\
+                -E 4,1 \\
+                -B 5 \\
+                -z 400,50 \\
+                -r 2k \\
+                "${params.align_to_ref}" \\
+                "${fastq}" |
+            lsamtools view \\
+                -1 \\
+                -O bam \\
+                -o "${fastq.baseName}.unsorted.mini.bam" \\
+                -
+        else
+            minimap2 \\
+                -t "${task_cpus}" \\
+                -a \\
+                -x map-pb \\ 
+                --secondary=no \\
+                -Y \\
+                --eqx \\
+                -L \\
+                -O 5,56 \\
+                -E 4,1 \\
+                -B 5 \\
+                -z 400,50 \\
+                -r 2k \\
+                "${params.align_to_ref}" \\
+                "${fastq}" |
+            lsamtools view \\
+                -C \\
+                -T "${params.align_to_ref}" \\
+                -o "${fastq.baseName}.unsorted.mini.cram" \\
+                -
+        fi
     fi
     """
 }
