@@ -47,6 +47,7 @@ def main(low_mapq_file_list, combined_low_depth_out_file, combined_low_mapq_out_
                         continue
 
                     toks = line.strip().split('\t')
+                    print(toks)
                     chrom = toks[0]
                     start = int(toks[1])
                     if start % 1000000 == 0:
@@ -55,8 +56,13 @@ def main(low_mapq_file_list, combined_low_depth_out_file, combined_low_mapq_out_
                     # The number of reads with a MAPQ less than or equal to the defined '--mapq_threshold'
                     # when DRF was run. The recommended GATK threshold is < 10, and is what we use as the 
                     # default for our pipeline (except DRF uses '<=', so we use 9 as the input).
-                    nMapQBelowThresh_total = int(toks[3])
-                    depth_total = int(toks[4])
+                    nMapQBelowThresh_total = int(float(toks[3]))
+                    percMapQBelowThresh_total = float(toks[4])
+                    avgDepthExcludingDeletions_total = int(float(toks[5]))
+                    nReadsWithDeletions_total = int(float(toks[6]))
+                    depth_total = int(float(toks[7])) #Mark W. Changed due to new DRF cols
+                    #print(depth_total)
+                    #depth_total = int(toks[4])
                     for bed in beds_to_combine[1:]:
                         line = bed.readline()
                         toks = line.strip().split('\t')
@@ -68,14 +74,22 @@ def main(low_mapq_file_list, combined_low_depth_out_file, combined_low_mapq_out_
                         if bed_chrom != chrom or bed_start != start:
                             raise ValueError("Input bed files are not in the same order")
 
-                        nMapQBelowThresh_total += int(toks[3])
-                        depth_total += int(toks[4])
+                        nMapQBelowThresh_total += int(float(toks[3]))
+                        percMapQBelowThresh_total += float(toks[4])
+                        avgDepthExcludingDeletions_total += int(float(toks[5]))
+                        nReadsWithDeletions_total += int(float(toks[6]))
+                        depth_total += int(float(toks[7])) #Mark W. Changed due to new DRF cols
+
+                        #depth_total += int(toks[4])
 
                     avgMapQBelowThresh = float(nMapQBelowThresh_total) / len(beds_to_combine)
                     avgDepth = float(depth_total) / len(beds_to_combine)
                     avgPercMapQBelowThresh = avgMapQBelowThresh / avgDepth * 100 if avgDepth > 0 else -1.0
+                    avgDepthExludingDeletions = float(avgDepthExcludingDeletions_total) / len(beds_to_combine)
+                    avgReadsWithDeletions = float(nReadsWithDeletions_total) / len(beds_to_combine)
+                    print(avgReadsWithDeletions)
 
-                    out_line = "%s\t%d\t%d\t%f\t%f\t%f\n" % (chrom, start, start + 1, avgMapQBelowThresh, avgDepth, avgPercMapQBelowThresh)
+                    out_line = "%s\t%d\t%d\t%f\t%f\t%f\t%f\t%f\n" % (chrom, start, start + 1, avgMapQBelowThresh, avgPercMapQBelowThresh, avgDepthExludingDeletions, avgReadsWithDeletions, avgDepth)
                             
                     if avgDepth <= MIN_DEPTH:
                         combined_low_depth.write(out_line)

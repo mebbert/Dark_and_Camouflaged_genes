@@ -116,8 +116,7 @@ mapq_not_camo="${SEQUENCER}.${GVERS}.low_mapq.NOT_camo.bed"
 # function pipe_failed {
 # 
 # 	exit_status_list=("$@")
-# 
-# 	for status in "${exit_status_list[@]}"
+# # 	for status in "${exit_status_list[@]}"
 # 	do
 # 		# If exit status is not 0 (success) or 141 (SIGPIPE), throw error. Igore 141 because some
 # 		# commands intentionally close the pipe prematurely (e.g., remove_unassembled_contigs.py).
@@ -149,9 +148,12 @@ mapq_not_camo="${SEQUENCER}.${GVERS}.low_mapq.NOT_camo.bed"
 
 # print header line
 echo -e "#chrom\tstart\tend\tmean depth\tmedian depth" > ${depth_merged}
-time bedtools merge -d 20 -c 5 -o mean,median -i $DEPTH_BED | \
+#time bedtools merge -d 20 -c 5 -o mean,median -i $DEPTH_BED | \ # MARK W. REMOVED THIS TO FIX SMALL REGION FROM BEING INCLUDED
+time bedtools merge -c 8 -o collapse -i $DEPTH_BED | \
 	remove_unassembled_contigs.py | \
-	awk '{ if($3 - $2 > 20) print $0}' \
+	awk '{ if($3 - $2 > 20) print $0}' | \
+	bedtools merge -d 20 -c 4 -o collapse -i - | \
+	averageCollapseCoverage.py \
 	>> $depth_merged \
 	|| if [[ $? -eq 141 ]]; then  # Swallow 141 (SIGPIPE)
 			true
@@ -182,9 +184,12 @@ TMPSTATUS=("${PIPESTATUS[@]}")
 
 # print header line
 echo -e "#chrom\tstart\tend\tmean depth\tmedian depth" > ${mapq_merged}
-time bedtools merge -d 20 -c 5 -o mean,median -i $MAPQ_BED | \
+#time bedtools merge -d 20 -c 5 -o mean,median -i $MAPQ_BED | \# MARK W. REMOVED THIS TO FIX SMALL REGION FROM BEING INCLUDED
+time bedtools merge -c 8 -o collapse -i $MAPQ_BED | \
 	remove_unassembled_contigs.py | \
-	awk '{ if($3 - $2 > 20) print $0}' \
+	awk '{ if($3 - $2 > 20) print $0}' | \
+	bedtools merge -d 20 -c 4 -o collapse -i - | \
+	averageCollapseCoverage.py \
 	>> $mapq_merged \
 	|| if [[ $? -eq 141 ]]; then  # Swallow 141 (SIGPIPE)
 			true

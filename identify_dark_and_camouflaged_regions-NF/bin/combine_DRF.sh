@@ -73,6 +73,7 @@ mkdir $LOW_MAPQ_DIR
 for split_file in $sample_dir/*
 do
 	suffix=$(basename $split_file)	
+	echo $suffix
 	time combine $suffix "${LOW_DEPTH_DIR}/$suffix.gz" "${LOW_MAPQ_DIR}/$suffix.gz" &
 done
 wait
@@ -80,8 +81,8 @@ wait
 LOW_DEPTH_FILE_OUT=${RESULT_PREFIX}.combined.dark.low_depth.bed.gz
 LOW_MAPQ_FILE_OUT=${RESULT_PREFIX}.combined.dark.low_mapq.bed.gz
 
-echo -e "chrom\tstart\tend\tavg_nMapQBelowThreshold\tavg_depth\tavg_percMapQBelowThreshold" | pigz --fast -p 1 > $LOW_DEPTH_FILE_OUT
-echo -e "chrom\tstart\tend\tavg_nMapQBelowThreshold\tavg_depth\tavg_percMapQBelowThreshold" | pigz --fast -p 1 > $LOW_MAPQ_FILE_OUT
+echo -e "chrom\tstart\tend\tavg_nMapQBelowThreshold\tavg_percMapQBelowThreshold\tavgDepthExludingDeletions\tavgReadsWithDeletions\tavg_depth" | pigz --fast -p 1 > $LOW_DEPTH_FILE_OUT
+echo -e "chrom\tstart\tend\tavg_nMapQBelowThreshold\tavg_percMapQBelowThreshold\tavgDepthExludingDeletions\tavgReadsWithDeletions\tavg_depth" | pigz --fast -p 1 > $LOW_MAPQ_FILE_OUT
 
 # The files were written via gzip, so can simply be catted together.
 cat ${LOW_DEPTH_DIR}/*  >> $LOW_DEPTH_FILE_OUT

@@ -25,7 +25,8 @@ def concatenate_DRF_files(file_genomic_regions, combined_out_file):
 
     # Create empty file (or delete contents, if exists) and write header
     f = open(combined_out_file, 'w')
-    f.write("chrom\tstart\tend\tnMapQBelowThreshold\tdepth\tpercMapQBelowThreshold\n")
+    #f.write("chrom\tstart\tend\tnMapQBelowThreshold\tdepth\tpercMapQBelowThreshold\n")
+    f.write("chrom\tstart\tend\tnMapQBelowThreshold\tpercMapQBelowThreshold\tdepthExcludingDeletions\tnReadsWithDeletion\tnReadsSpanningPosition\n") #Mark W. Added to support new columns being reported from DRF
     f.close()
     for i, row in enumerate(file_genomic_regions):
         in_filename = row[0]

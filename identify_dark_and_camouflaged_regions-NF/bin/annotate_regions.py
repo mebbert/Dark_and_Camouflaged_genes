@@ -50,14 +50,17 @@ def main(percent_camo_file, biotype_camo_file, coding_camo_file, label):
 		region_id = annos['ID']
 		region_name = annos['Name']
 		
-		gene_id = region_id.split('_')[0]
+		gene_id = "_".join(region_id.split('_')[0:-2])
+		if region_type == "gene":
+			gene_id = region_id
 		if gene_id.startswith("gene"): gene_id = gene_id[5:]
-		gene_name = region_name.split('_')[0]
+		gene_name = "_".join(region_name.split('_')[0:-2])
 		gene_names[gene_id] = gene_name
 		
 		biotype_bin = biotype
 		if "pseudo" in biotype: biotype_bin = "pseudogene"
 		elif biotype in ["snRNA", "snoRNA"]: biotype_bin = "snRNA"
+		elif biotype in ["lncRNA", "lincRNA"]: biotype_bin = "lincRNA"
 		elif biotype not in biotype_bins: biotype_bin = "other"
 		if biotype == "protein_coding": biotype_bin = "protein coding"
 		biotypes[gene_id] = biotype_bin
